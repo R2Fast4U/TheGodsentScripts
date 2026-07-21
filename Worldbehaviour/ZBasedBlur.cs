@@ -8,17 +8,17 @@ public class ZBasedBlur : MonoBehaviour
     [Tooltip("Objects between Min and Max Z are in perfect focus (no blur).")]
     public float focusRangeMin = -2f;
     [Tooltip("Objects between Min and Max Z are in perfect focus (no blur).")]
-    public float focusRangeMax = 10f;
+    public float focusRangeMax = 4f;
 
     [Header("Blur Strength Rates")]
     [Tooltip("How fast the blur increases as the object moves further into the background (Z > focusRangeMax).")]
-    public float blurRateBackground = 0.1f;
+    public float blurRateBackground = 0.3f;
     [Tooltip("How fast the blur increases as the object moves closer to the foreground (Z < focusRangeMin).")]
-    public float blurRateForeground = 0.2f;
+    public float blurRateForeground = 0.6f;
 
     [Tooltip("The maximum blur strength allowed.")]
-    [Range(0f, 1f)]
-    public float maxBlur = 1f;
+    [Range(0f, 10f)]
+    public float maxBlur = 5f;
 
     [Header("Material Settings")]
     [Tooltip("The shader property name for controlling the blur amount.")]

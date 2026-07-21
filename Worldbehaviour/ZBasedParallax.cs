@@ -13,7 +13,7 @@ public class ZBasedParallax : MonoBehaviour
 
     [Tooltip("Smooths position to avoid jitter from camera sub-pixel jumps. Higher = smoother, 0 = off.")]
     [Range(0f, 50f)]
-    public float positionSmooth = 30f;
+    public float positionSmooth = 49f;
 
     [Header("Editor Helpers")]
     [Tooltip("If checked, the script will automatically calculate and display the Parallax Factor in the inspector based on Z.")]

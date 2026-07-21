@@ -6,6 +6,7 @@ public class CollisionSenses : CoreComponent
 {
     #region Check Transforms
     [SerializeField] private Transform groundCheck;
+    public Transform GroundCheck => groundCheck;
     [SerializeField] private Transform wallCheck;
     public Transform WallCheck => wallCheck;
     [SerializeField] private Transform ledgeCheck;

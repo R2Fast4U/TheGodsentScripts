@@ -15,9 +15,9 @@ public class CinemachineOffsetController : MonoBehaviour
     private Vector3 currentOffset;
     private Vector3 velocity = Vector3.zero;
 
-    private float defaultOrthoSize;
+    private float defaultLensValue;
     private float hitZoomTimer;
-    private float currentOrthoSize;
+    private float currentLensValue;
     private bool isHitZooming;
 
     public static CinemachineOffsetController Instance { get; private set; }
@@ -38,8 +38,10 @@ public class CinemachineOffsetController : MonoBehaviour
 
         if (virtualCamera != null)
         {
-            defaultOrthoSize = virtualCamera.m_Lens.OrthographicSize;
-            currentOrthoSize = defaultOrthoSize;
+            defaultLensValue = virtualCamera.m_Lens.Orthographic 
+                ? virtualCamera.m_Lens.OrthographicSize 
+                : virtualCamera.m_Lens.FieldOfView;
+            currentLensValue = defaultLensValue;
         }
     }
 
@@ -59,30 +61,46 @@ public class CinemachineOffsetController : MonoBehaviour
 
             if (hitZoomTimer > 0f)
             {
-                currentOrthoSize = defaultOrthoSize - hitZoomAmount;
+                currentLensValue = defaultLensValue - hitZoomAmount;
             }
             else
             {
-                currentOrthoSize = Mathf.Lerp(currentOrthoSize, defaultOrthoSize, Time.deltaTime * hitZoomRecoverySpeed);
-                if (Mathf.Abs(currentOrthoSize - defaultOrthoSize) < 0.01f)
+                currentLensValue = Mathf.Lerp(currentLensValue, defaultLensValue, Time.deltaTime * hitZoomRecoverySpeed);
+                if (Mathf.Abs(currentLensValue - defaultLensValue) < 0.01f)
                 {
-                    currentOrthoSize = defaultOrthoSize;
+                    currentLensValue = defaultLensValue;
                     isHitZooming = false;
                 }
             }
 
-            virtualCamera.m_Lens.OrthographicSize = currentOrthoSize;
+            if (virtualCamera.m_Lens.Orthographic)
+            {
+                virtualCamera.m_Lens.OrthographicSize = currentLensValue;
+            }
+            else
+            {
+                virtualCamera.m_Lens.FieldOfView = currentLensValue;
+            }
         }
     }
 
     public void TriggerHitZoom()
     {
-        if (virtualCamera == null || defaultOrthoSize <= 0f)
+        if (virtualCamera == null || defaultLensValue <= 0f)
             return;
 
         hitZoomTimer = hitZoomDuration;
-        currentOrthoSize = defaultOrthoSize - hitZoomAmount;
-        virtualCamera.m_Lens.OrthographicSize = currentOrthoSize;
+        currentLensValue = defaultLensValue - hitZoomAmount;
+
+        if (virtualCamera.m_Lens.Orthographic)
+        {
+            virtualCamera.m_Lens.OrthographicSize = currentLensValue;
+        }
+        else
+        {
+            virtualCamera.m_Lens.FieldOfView = currentLensValue;
+        }
+
         isHitZooming = true;
     }
 

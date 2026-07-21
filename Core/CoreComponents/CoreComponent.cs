@@ -8,11 +8,11 @@ public class CoreComponent : MonoBehaviour
 
     protected virtual void Awake()
     {
-        core = transform.parent.GetComponent<Core>();
+        core = GetComponentInParent<Core>();
 
         if (core == null)
         {
-            Debug.LogError("CoreComponent is not a child of a Core object.");
+            Debug.LogError($"CoreComponent '{name}' could not find a Core component in its parents.");
         }
     }
 

@@ -1,24 +1,36 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 [ExecuteInEditMode]
 [RequireComponent(typeof(Renderer))]
 public class ZBasedBlur : MonoBehaviour
-{
+{   
+
+
     [Header("Focus Thresholds")]
     [Tooltip("Objects between Min and Max Z are in perfect focus (no blur).")]
-    public float focusRangeMin = -2f;
+
+    [SerializeField]
+    public float focusRangeMin = -6f;
     [Tooltip("Objects between Min and Max Z are in perfect focus (no blur).")]
-    public float focusRangeMax = 4f;
+    [SerializeField]
+    public float focusRangeMax = 6f;
 
     [Header("Blur Strength Rates")]
     [Tooltip("How fast the blur increases as the object moves further into the background (Z > focusRangeMax).")]
-    public float blurRateBackground = 0.3f;
+    [SerializeField]
+    public float blurRateBackground = 0.03f;
     [Tooltip("How fast the blur increases as the object moves closer to the foreground (Z < focusRangeMin).")]
-    public float blurRateForeground = 0.6f;
+    [SerializeField]
+    public float blurRateForeground = 0.06f;
 
-    [Tooltip("The maximum blur strength allowed.")]
+    [Tooltip("The maximum blur strength allowed for objects in the background (Z > focusRangeMax).")]
     [Range(0f, 10f)]
-    public float maxBlur = 5f;
+    [FormerlySerializedAs("maxBlur")]
+    public float maxBlurBackground = 5f;
+    [Tooltip("The maximum blur strength allowed for objects in the foreground (Z < focusRangeMin).")]
+    [Range(0f, 10f)]
+    public float maxBlurForeground = 1.5f;
 
     [Header("Material Settings")]
     [Tooltip("The shader property name for controlling the blur amount.")]
@@ -68,20 +80,19 @@ public class ZBasedBlur : MonoBehaviour
         {
             // Background blur
             calculatedBlurAmount = (currentZ - focusRangeMax) * blurRateBackground;
+            calculatedBlurAmount = Mathf.Clamp(calculatedBlurAmount, 0f, maxBlurBackground);
         }
         else if (currentZ < focusRangeMin)
         {
             // Foreground blur
             calculatedBlurAmount = (focusRangeMin - currentZ) * blurRateForeground;
+            calculatedBlurAmount = Mathf.Clamp(calculatedBlurAmount, 0f, maxBlurForeground);
         }
         else
         {
             // In focus
             calculatedBlurAmount = 0f;
         }
-
-        // Clamp to limits
-        calculatedBlurAmount = Mathf.Clamp(calculatedBlurAmount, 0f, maxBlur);
 
         // Apply using MaterialPropertyBlock to avoid instantiating new materials (prevents memory leaks and maintains performance)
         spriteRenderer.GetPropertyBlock(propertyBlock);

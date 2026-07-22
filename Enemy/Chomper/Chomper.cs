@@ -57,6 +57,12 @@ public class Chomper : Enemy
     [SerializeField] private GameObject deathNutParticle2;
     [SerializeField] private GameObject deathTinParticle;
 
+    [Header("Audio")]
+    [SerializeField] private AudioClip[] footstepSounds;
+    [SerializeField] [Range(0f, 1f)] private float footstepVolume = 0.5f;
+    [SerializeField] private AudioClip[] deathSounds;
+    [SerializeField] [Range(0f, 1f)] private float deathVolume = 1f;
+
     private SpriteRenderer spriteRenderer;
     private bool isFlipping;
     private float lastFlipTime;
@@ -109,8 +115,16 @@ public class Chomper : Enemy
         SwitchState(State.Walking);
     }
 
+    private void PlayFootstep()
+    {
+        if (footstepSounds != null && footstepSounds.Length > 0)
+            audioSource.PlayOneShot(footstepSounds[Random.Range(0, footstepSounds.Length)], footstepVolume);
+    }
+
     protected override void EnterDeadState()
     {
+        if (deathSounds != null && deathSounds.Length > 0)
+            AudioSource.PlayClipAtPoint(deathSounds[Random.Range(0, deathSounds.Length)], transform.position, deathVolume);
         if (deathNutParticle1 != null) Instantiate(deathNutParticle1, transform.position, deathNutParticle1.transform.rotation);
         if (deathNutParticle2 != null) Instantiate(deathNutParticle2, transform.position, deathNutParticle2.transform.rotation);
         if (deathScrewParticle != null) Instantiate(deathScrewParticle, transform.position, deathScrewParticle.transform.rotation);

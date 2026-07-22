@@ -61,6 +61,13 @@ public class Player : MonoBehaviour
     public Transform spriteTransform;
     #endregion
 
+    #region Particles
+    [SerializeField] private ParticleSystem feetParticlesPrefab;
+    [SerializeField] private Transform feetParticlesPosition;
+    [SerializeField] private ParticleSystem lightParticlesPrefab;
+    [SerializeField] private Transform lightParticlesPosition;
+    #endregion
+
     #region Unity Callbacks
 
     private void Awake()
@@ -124,6 +131,11 @@ public class Player : MonoBehaviour
         StateMachine.Initialize(IdleState);
 
         Core.Movement.RB.gravityScale = playerData.gravityScale;
+
+        if (feetParticlesPrefab != null && feetParticlesPosition != null)
+            Instantiate(feetParticlesPrefab, feetParticlesPosition.position, Quaternion.identity, transform);
+        if (lightParticlesPrefab != null && lightParticlesPosition != null)
+            Instantiate(lightParticlesPrefab, lightParticlesPosition.position, Quaternion.identity, transform);
     }
 
     private void Update()

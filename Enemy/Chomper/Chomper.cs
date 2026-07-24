@@ -25,6 +25,8 @@ public class Chomper : Enemy
     [SerializeField] private float maxHealth = 30f;
     [SerializeField] private float knockbackDuration = 0.2f;
     [SerializeField] private Vector2 knockbackSpeed = new Vector2(5f, 3f);
+    [SerializeField] private float attackCooldown = 4f;
+    [SerializeField] private Vector2 attackJumpForce = new Vector2(48f, 96f);
     protected override float GroundCheckDist => groundCheckDistance;
     protected override float WallCheckDist => wallCheckDistance;
     protected override float MoveSpeed => movementSpeed;
@@ -60,17 +62,27 @@ public class Chomper : Enemy
     [Header("Audio")]
     [SerializeField] private AudioClip[] footstepSounds;
     [SerializeField] [Range(0f, 1f)] private float footstepVolume = 0.5f;
+    [SerializeField] private AudioClip[] attackReloadSounds;
+    [SerializeField] [Range(0f, 1f)] private float attackReloadVolume = 0.7f;
+    [SerializeField] private AudioClip[] attackJumpSounds;
+    [SerializeField] [Range(0f, 1f)] private float attackJumpVolume = 0.7f;
+    [SerializeField] private AudioClip[] attackLandSounds;
+    [SerializeField] [Range(0f, 1f)] private float attackLandVolume = 0.7f;
     [SerializeField] private AudioClip[] deathSounds;
     [SerializeField] [Range(0f, 1f)] private float deathVolume = 1f;
 
     private SpriteRenderer spriteRenderer;
     private bool isFlipping;
     private float lastFlipTime;
+    private float attackTimer;
+    private float reloadStartTime;
+    private bool wasAirborne;
 
     protected override void Start()
     {
         base.Start();
         spriteRenderer = GetComponentInChildren<SpriteRenderer>();
+        attackTimer = attackCooldown;
     }
 
     public override void Flip()
@@ -97,6 +109,13 @@ public class Chomper : Enemy
         }
 
         base.UpdateWalkingState();
+
+        attackTimer += Time.deltaTime;
+        if (attackTimer >= attackCooldown)
+        {
+            attackTimer = 0f;
+            SwitchState(State.AttackReload);
+        }
     }
 
     protected override void OnObstacleDetected()
@@ -121,16 +140,88 @@ public class Chomper : Enemy
             audioSource.PlayOneShot(footstepSounds[Random.Range(0, footstepSounds.Length)], footstepVolume);
     }
 
+    public override void Damage(float amount)
+    {
+        currentHealth -= amount;
+        DetermineDamageDirection();
+        OnDamageFeedback();
+
+        if (currentHealth <= 0f)
+        {
+            SwitchState(State.Dead);
+            return;
+        }
+
+        if (currentState == State.AttackReload || currentState == State.Attack)
+            return;
+
+        SwitchState(State.Knockback);
+    }
+
+    protected override void EnterAttackReloadState()
+    {
+        reloadStartTime = Time.time;
+        rb.velocity = Vector2.zero;
+        if (anim != null)
+            anim.Play("ChomperAttackReload");
+        if (attackReloadSounds != null && attackReloadSounds.Length > 0)
+            audioSource.PlayOneShot(attackReloadSounds[Random.Range(0, attackReloadSounds.Length)], attackReloadVolume);
+    }
+
+    protected override void UpdateAttackReloadState()
+    {
+        if (Time.time >= reloadStartTime + 1f)
+            SwitchState(State.Attack);
+    }
+
+    protected override void ExitAttackReloadState() { }
+
+    protected override void EnterAttackState()
+    {
+        wasAirborne = true;
+        float dir = facingDirection;
+        rb.velocity = new Vector2(attackJumpForce.x * dir, attackJumpForce.y);
+        if (anim != null)
+            anim.Play("ChomperAttack");
+        if (attackJumpSounds != null && attackJumpSounds.Length > 0)
+            audioSource.PlayOneShot(attackJumpSounds[Random.Range(0, attackJumpSounds.Length)], attackJumpVolume);
+    }
+
+    protected override void UpdateAttackState()
+    {
+        bool grounded = Physics2D.Raycast(GroundCheckTrans.position, Vector2.down, GroundCheckDist, GroundLayer);
+        if (wasAirborne && grounded && rb.velocity.y <= 0f)
+        {
+            if (attackLandSounds != null && attackLandSounds.Length > 0)
+                audioSource.PlayOneShot(attackLandSounds[Random.Range(0, attackLandSounds.Length)], attackLandVolume);
+            SwitchState(State.Walking);
+        }
+        if (!grounded)
+            wasAirborne = true;
+    }
+
+    protected override void ExitAttackState() { }
+
     protected override void EnterDeadState()
     {
+        if (spriteRenderer != null) spriteRenderer.enabled = false;
+        var col = GetComponent<Collider2D>();
+        if (col != null) col.enabled = false;
+        rb.simulated = false;
+
+        float destroyDelay = 0.1f;
         if (deathSounds != null && deathSounds.Length > 0)
-            AudioSource.PlayClipAtPoint(deathSounds[Random.Range(0, deathSounds.Length)], transform.position, deathVolume);
+        {
+            var clip = deathSounds[Random.Range(0, deathSounds.Length)];
+            audioSource.PlayOneShot(clip, deathVolume);
+            destroyDelay = clip.length;
+        }
         if (deathNutParticle1 != null) Instantiate(deathNutParticle1, transform.position, deathNutParticle1.transform.rotation);
         if (deathNutParticle2 != null) Instantiate(deathNutParticle2, transform.position, deathNutParticle2.transform.rotation);
         if (deathScrewParticle != null) Instantiate(deathScrewParticle, transform.position, deathScrewParticle.transform.rotation);
         if (deathSpringParticle != null) Instantiate(deathSpringParticle, transform.position, deathSpringParticle.transform.rotation);
         if (deathTinParticle != null) Instantiate(deathTinParticle, transform.position, deathTinParticle.transform.rotation);
 
-        Destroy(gameObject);
+        Destroy(gameObject, destroyDelay);
     }
 }

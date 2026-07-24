@@ -7,7 +7,9 @@ public class Enemy : MonoBehaviour, IDamageable
     {
         Walking,
         Knockback,
-        Dead
+        Dead,
+        AttackReload,
+        Attack
     }
 
     protected State currentState;
@@ -69,6 +71,8 @@ public class Enemy : MonoBehaviour, IDamageable
             case State.Walking: UpdateWalkingState(); break;
             case State.Knockback: UpdateKnockbackState(); break;
             case State.Dead: UpdateDeadState(); break;
+            case State.AttackReload: UpdateAttackReloadState(); break;
+            case State.Attack: UpdateAttackState(); break;
         }
     }
 
@@ -79,12 +83,16 @@ public class Enemy : MonoBehaviour, IDamageable
             case State.Walking: ExitWalkingState(); break;
             case State.Knockback: ExitKnockbackState(); break;
             case State.Dead: ExitDeadState(); break;
+            case State.AttackReload: ExitAttackReloadState(); break;
+            case State.Attack: ExitAttackState(); break;
         }
         switch (state)
         {
             case State.Walking: EnterWalkingState(); break;
             case State.Knockback: EnterKnockbackState(); break;
             case State.Dead: EnterDeadState(); break;
+            case State.AttackReload: EnterAttackReloadState(); break;
+            case State.Attack: EnterAttackState(); break;
         }
         currentState = state;
     }
@@ -142,6 +150,14 @@ public class Enemy : MonoBehaviour, IDamageable
 
     protected virtual void UpdateDeadState() { }
     protected virtual void ExitDeadState() { }
+
+    protected virtual void EnterAttackReloadState() { }
+    protected virtual void UpdateAttackReloadState() { }
+    protected virtual void ExitAttackReloadState() { }
+
+    protected virtual void EnterAttackState() { }
+    protected virtual void UpdateAttackState() { }
+    protected virtual void ExitAttackState() { }
 
     protected virtual void CheckTouchDamage()
     {

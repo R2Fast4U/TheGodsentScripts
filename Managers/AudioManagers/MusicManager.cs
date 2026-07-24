@@ -22,10 +22,16 @@ public class MusicManager : MonoBehaviour
     [SerializeField] bool _playOnStart = true;
     [SerializeField] bool _playAmbienceOnStart = true;
     [SerializeField] bool _shufflePlaylist = false;
-    [SerializeField, Range(0f, 1f)] private float _baseVolume = 1.0f;
-    [SerializeField, Range(0f, 1f)] private float _combatVolume = 1.0f;
-    [SerializeField, Range(0f, 1f)] private float _ambienceVolume = 1.0f;
-    [SerializeField, Range(0f, 1f)] private float _baseVolumeInCombat = 0.15f;
+    [SerializeField, Range(0f, 1.5f)] private float _baseVolume = 1.0f;
+    [SerializeField, Range(0f, 1.5f)] private float _combatVolume = 1.0f;
+    [SerializeField, Range(0f, 1.5f)] private float _ambienceVolume = 1.0f;
+    [SerializeField, Range(0f, 1.5f)] private float _baseVolumeInCombat = 0.15f;
+
+    [Header("AudioMixer Exposed Parameters (for Gain > 1.0)")]
+    [Tooltip("Expose volume parameters in your AudioMixer and type their names here to support gain up to 1.5 (e.g. PeacefulVol).")]
+    [SerializeField] private string _peacefulVolumeParam = "";
+    [SerializeField] private string _combatVolumeParam = "";
+    [SerializeField] private string _ambienceVolumeParam = "";
 
     AudioMixerGroup _peacefulAudioMixerGroup, _combatAudioMixerGroup, _ambienceAudioMixerGroup;
     AudioSource _peacefulAudioSource, _combatAudioSource, _ambienceAudioSource, _audioSource;
@@ -155,7 +161,7 @@ public class MusicManager : MonoBehaviour
         }
         _ambienceAudioSource.loop = false;
         _ambienceAudioSource.playOnAwake = false;
-        _ambienceAudioSource.volume = _ambienceVolume;
+        SetSourceVolume(_ambienceAudioSource, _ambienceVolume, _ambienceVolumeParam);
 
         _audioSource = gameObject.AddComponent<AudioSource>();
         _audioSource.playOnAwake = false;
@@ -257,16 +263,17 @@ public class MusicManager : MonoBehaviour
             while (elapsed < fadeDuration)
             {
                 elapsed += Time.deltaTime;
-                _peacefulAudioSource.volume = Mathf.Lerp(startVol, 0f, elapsed / fadeDuration);
+                float currentVol = Mathf.Lerp(startVol, 0f, elapsed / fadeDuration);
+                SetSourceVolume(_peacefulAudioSource, currentVol, _peacefulVolumeParam);
                 yield return null;
             }
-            _peacefulAudioSource.volume = 0f;
+            SetSourceVolume(_peacefulAudioSource, 0f, _peacefulVolumeParam);
             _peacefulAudioSource.Stop();
         }
 
         _peacefulAudioSource.clip = clip;
         _peacefulAudioSource.loop = loop;
-        _peacefulAudioSource.volume = 0f;
+        SetSourceVolume(_peacefulAudioSource, 0f, _peacefulVolumeParam);
         _peacefulAudioSource.Play();
 
         float elapsedIn = 0f;
@@ -274,10 +281,11 @@ public class MusicManager : MonoBehaviour
         while (elapsedIn < fadeDuration)
         {
             elapsedIn += Time.deltaTime;
-            _peacefulAudioSource.volume = Mathf.Lerp(0f, targetVol, elapsedIn / fadeDuration);
+            float currentVol = Mathf.Lerp(0f, targetVol, elapsedIn / fadeDuration);
+            SetSourceVolume(_peacefulAudioSource, currentVol, _peacefulVolumeParam);
             yield return null;
         }
-        _peacefulAudioSource.volume = targetVol;
+        SetSourceVolume(_peacefulAudioSource, targetVol, _peacefulVolumeParam);
     }
 
     public void RestartCurrentTrack(float fadeDuration = 1.0f)
@@ -296,10 +304,11 @@ public class MusicManager : MonoBehaviour
             while (elapsed < fadeDuration)
             {
                 elapsed += Time.deltaTime;
-                _peacefulAudioSource.volume = Mathf.Lerp(startVol, 0f, elapsed / fadeDuration);
+                float currentVol = Mathf.Lerp(startVol, 0f, elapsed / fadeDuration);
+                SetSourceVolume(_peacefulAudioSource, currentVol, _peacefulVolumeParam);
                 yield return null;
             }
-            _peacefulAudioSource.volume = 0f;
+            SetSourceVolume(_peacefulAudioSource, 0f, _peacefulVolumeParam);
             _peacefulAudioSource.Stop();
         }
 
@@ -311,10 +320,11 @@ public class MusicManager : MonoBehaviour
         while (elapsedIn < fadeDuration)
         {
             elapsedIn += Time.deltaTime;
-            _peacefulAudioSource.volume = Mathf.Lerp(0f, targetVol, elapsedIn / fadeDuration);
+            float currentVol = Mathf.Lerp(0f, targetVol, elapsedIn / fadeDuration);
+            SetSourceVolume(_peacefulAudioSource, currentVol, _peacefulVolumeParam);
             yield return null;
         }
-        _peacefulAudioSource.volume = targetVol;
+        SetSourceVolume(_peacefulAudioSource, targetVol, _peacefulVolumeParam);
     }
 
     public void StartCombat(float fadeDuration = 1.0f, float combatVolume = -1.0f)
@@ -468,13 +478,15 @@ public class MusicManager : MonoBehaviour
     {
         float startVol = source.volume;
         float elapsed = 0f;
+        string mixerParam = GetMixerParamForSource(source);
         while (elapsed < duration)
         {
             elapsed += Time.deltaTime;
-            source.volume = Mathf.Lerp(startVol, targetVolume, elapsed / duration);
+            float currentVol = Mathf.Lerp(startVol, targetVolume, elapsed / duration);
+            SetSourceVolume(source, currentVol, mixerParam);
             yield return null;
         }
-        source.volume = targetVolume;
+        SetSourceVolume(source, targetVolume, mixerParam);
         if (stopOnZero && targetVolume <= 0.001f)
         {
             source.Stop();
@@ -560,26 +572,28 @@ public class MusicManager : MonoBehaviour
             while (elapsed < fadeDuration)
             {
                 elapsed += Time.deltaTime;
-                _ambienceAudioSource.volume = Mathf.Lerp(startVol, 0f, elapsed / fadeDuration);
+                float currentVol = Mathf.Lerp(startVol, 0f, elapsed / fadeDuration);
+                SetSourceVolume(_ambienceAudioSource, currentVol, _ambienceVolumeParam);
                 yield return null;
             }
-            _ambienceAudioSource.volume = 0f;
+            SetSourceVolume(_ambienceAudioSource, 0f, _ambienceVolumeParam);
             _ambienceAudioSource.Stop();
         }
 
         _ambienceAudioSource.clip = clip;
         _ambienceAudioSource.loop = loop;
-        _ambienceAudioSource.volume = 0f;
+        SetSourceVolume(_ambienceAudioSource, 0f, _ambienceVolumeParam);
         _ambienceAudioSource.Play();
 
         float elapsedIn = 0f;
         while (elapsedIn < fadeDuration)
         {
             elapsedIn += Time.deltaTime;
-            _ambienceAudioSource.volume = Mathf.Lerp(0f, _ambienceVolume, elapsedIn / fadeDuration);
+            float currentVol = Mathf.Lerp(0f, _ambienceVolume, elapsedIn / fadeDuration);
+            SetSourceVolume(_ambienceAudioSource, currentVol, _ambienceVolumeParam);
             yield return null;
         }
-        _ambienceAudioSource.volume = _ambienceVolume;
+        SetSourceVolume(_ambienceAudioSource, _ambienceVolume, _ambienceVolumeParam);
     }
 
     #region Volume Sliders & API
@@ -609,38 +623,61 @@ public class MusicManager : MonoBehaviour
 
     public void SetPeacefulVolume(float volume)
     {
-        _baseVolume = Mathf.Clamp01(volume);
+        _baseVolume = Mathf.Clamp(volume, 0f, 1.5f);
         if (_peacefulAudioSource != null)
         {
-            _peacefulAudioSource.volume = _isInCombat ? _baseVolumeInCombat : _baseVolume;
+            SetSourceVolume(_peacefulAudioSource, _isInCombat ? _baseVolumeInCombat : _baseVolume, _peacefulVolumeParam);
         }
     }
 
     public void SetCombatVolume(float volume)
     {
-        _combatVolume = Mathf.Clamp01(volume);
+        _combatVolume = Mathf.Clamp(volume, 0f, 1.5f);
         if (_combatAudioSource != null)
         {
-            _combatAudioSource.volume = _isInCombat ? _combatVolume : 0f;
+            SetSourceVolume(_combatAudioSource, _isInCombat ? _combatVolume : 0f, _combatVolumeParam);
         }
     }
 
     public void SetAmbienceVolume(float volume)
     {
-        _ambienceVolume = Mathf.Clamp01(volume);
+        _ambienceVolume = Mathf.Clamp(volume, 0f, 1.5f);
         if (_ambienceAudioSource != null)
         {
-            _ambienceAudioSource.volume = _ambienceVolume;
+            SetSourceVolume(_ambienceAudioSource, _ambienceVolume, _ambienceVolumeParam);
         }
     }
 
     public void SetBaseVolumeInCombat(float volume)
     {
-        _baseVolumeInCombat = Mathf.Clamp01(volume);
+        _baseVolumeInCombat = Mathf.Clamp(volume, 0f, 1.5f);
         if (_peacefulAudioSource != null)
         {
-            _peacefulAudioSource.volume = _isInCombat ? _baseVolumeInCombat : _baseVolume;
+            SetSourceVolume(_peacefulAudioSource, _isInCombat ? _baseVolumeInCombat : _baseVolume, _peacefulVolumeParam);
         }
+    }
+
+    private void SetSourceVolume(AudioSource source, float volume, string mixerParam)
+    {
+        if (source == null) return;
+        source.volume = Mathf.Clamp01(volume);
+        if (_audioMixer != null && !string.IsNullOrEmpty(mixerParam))
+        {
+            // Convert linear volume (0.0 to 1.5) to decibels
+            // 1.0 linear = 0 dB. 1.5 linear = 20 * log10(1.5) ≈ +3.52 dB.
+            // 0.0 linear = -80 dB (mute)
+            float clampedVolume = Mathf.Max(volume, 0.0001f);
+            float dB = 20f * Mathf.Log10(clampedVolume);
+            _audioMixer.SetFloat(mixerParam, dB);
+        }
+    }
+
+    private string GetMixerParamForSource(AudioSource source)
+    {
+        if (source == _peacefulAudioSource) return _peacefulVolumeParam;
+        if (source == _combatAudioSource) return _combatVolumeParam;
+        if (source == _ambienceAudioSource) return _ambienceVolumeParam;
+        return "";
     }
 
     void Update()
@@ -648,15 +685,15 @@ public class MusicManager : MonoBehaviour
         // Smoothly apply inspector slider updates in real-time if we are not fading
         if (_peacefulAudioSource != null && _baseCombatFadeCoroutine == null && _baseFadeCoroutine == null)
         {
-            _peacefulAudioSource.volume = _isInCombat ? _baseVolumeInCombat : _baseVolume;
+            SetSourceVolume(_peacefulAudioSource, _isInCombat ? _baseVolumeInCombat : _baseVolume, _peacefulVolumeParam);
         }
         if (_combatAudioSource != null && _combatFadeCoroutine == null)
         {
-            _combatAudioSource.volume = _isInCombat ? _combatVolume : 0f;
+            SetSourceVolume(_combatAudioSource, _isInCombat ? _combatVolume : 0f, _combatVolumeParam);
         }
         if (_ambienceAudioSource != null && _ambienceFadeCoroutine == null)
         {
-            _ambienceAudioSource.volume = _ambienceVolume;
+            SetSourceVolume(_ambienceAudioSource, _ambienceVolume, _ambienceVolumeParam);
         }
     }
 
@@ -667,15 +704,15 @@ public class MusicManager : MonoBehaviour
         {
             if (_peacefulAudioSource != null && _baseCombatFadeCoroutine == null && _baseFadeCoroutine == null)
             {
-                _peacefulAudioSource.volume = _isInCombat ? _baseVolumeInCombat : _baseVolume;
+                SetSourceVolume(_peacefulAudioSource, _isInCombat ? _baseVolumeInCombat : _baseVolume, _peacefulVolumeParam);
             }
             if (_combatAudioSource != null && _combatFadeCoroutine == null)
             {
-                _combatAudioSource.volume = _isInCombat ? _combatVolume : 0f;
+                SetSourceVolume(_combatAudioSource, _isInCombat ? _combatVolume : 0f, _combatVolumeParam);
             }
             if (_ambienceAudioSource != null && _ambienceFadeCoroutine == null)
             {
-                _ambienceAudioSource.volume = _ambienceVolume;
+                SetSourceVolume(_ambienceAudioSource, _ambienceVolume, _ambienceVolumeParam);
             }
         }
     }

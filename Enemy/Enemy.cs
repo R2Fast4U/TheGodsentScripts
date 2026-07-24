@@ -173,7 +173,17 @@ public class Enemy : MonoBehaviour, IDamageable
 
         lastTouchDamageTime = Time.time;
         foreach (Collider2D hit in hits)
-            hit.GetComponent<IDamageable>()?.Damage(TouchDmg);
+        {
+            // The receiver (e.g. the player) may implement these on a child Core
+            // component, so fall back to a children search from the hit collider.
+            IDamageable damageable = hit.GetComponent<IDamageable>() ?? hit.GetComponentInChildren<IDamageable>();
+            damageable?.Damage(TouchDmg);
+
+            IKnockbackable knockbackable = hit.GetComponent<IKnockbackable>() ?? hit.GetComponentInChildren<IKnockbackable>();
+            // Push the target away from this enemy: +1 if it's to our right, -1 if to our left.
+            int knockbackDirection = hit.transform.position.x >= transform.position.x ? 1 : -1;
+            knockbackable?.Knockback(knockbackDirection);
+        }
     }
 
     public virtual void Damage(float amount)

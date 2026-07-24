@@ -23,6 +23,7 @@ public class Player : MonoBehaviour
     public PlayerWarpState WarpState { get; private set; }
     public PlayerAttackState PrimaryAttackState { get; private set; }
     public PlayerAttackState SecondaryAttackState { get; private set; }
+    public PlayerHurtState HurtState { get; private set; }
 
     [SerializeField] private PlayerData playerData;
     public PlayerData PlayerData => playerData;
@@ -30,6 +31,7 @@ public class Player : MonoBehaviour
 
     #region Components
     public Core Core { get; private set; }
+    public Combat Combat => Core != null ? Core.Combat : null;
     public PlayerInputHandler InputHandler { get; private set; }
     public InputBuffer InputBuffer { get; private set; }
     public Animator Anim { get; private set; }
@@ -92,7 +94,8 @@ public class Player : MonoBehaviour
         LookDownState = new PlayerLookDownState(this, StateMachine, playerData, "lookDown");
         WarpState = new PlayerWarpState(this, StateMachine, playerData, "warp");
         PrimaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");
-        SecondaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");   
+        SecondaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");
+        HurtState = new PlayerHurtState(this, StateMachine, playerData, "hurt");
     }
 
     private void Start()
@@ -130,6 +133,10 @@ public class Player : MonoBehaviour
 
         StateMachine.Initialize(IdleState);
 
+        // React to incoming damage/knockback by entering the hurt state.
+        if (Combat != null)
+            Combat.OnDamaged += HandleDamaged;
+
         Core.Movement.RB.gravityScale = playerData.gravityScale;
 
         if (feetParticlesPrefab != null && feetParticlesPosition != null)
@@ -166,6 +173,25 @@ public class Player : MonoBehaviour
         }
     }
 
+    private void OnDestroy()
+    {
+        if (Combat != null)
+            Combat.OnDamaged -= HandleDamaged;
+    }
+
+    #endregion
+
+    #region Damage Handling
+    // Invoked by Combat.OnDamaged. Enters the hurt state so knockback takes over
+    // control. The separate Knockback() call sets the actual impulse velocity.
+    private void HandleDamaged(float amount, float currentHealth)
+    {
+        if (Combat != null && Combat.IsDead) return;
+        // Already reacting to a hit — the fresh Knockback() call extends it.
+        if (StateMachine.CurrentState == HurtState) return;
+
+        StateMachine.ChangeState(HurtState);
+    }
     #endregion
     #region Check Properties
     public bool Grounded

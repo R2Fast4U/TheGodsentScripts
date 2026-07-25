@@ -55,14 +55,14 @@ public class PlayerJumpState : PlayerAbilityState
             jumpCutApplied = true;
         }
 
-        // Check for attack inputs to allow attacking while rising
-        if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
+        // Check for attack inputs to allow attacking while rising (respecting the CanAttack gate)
+        if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.primary);
             stateMachine.ChangeState(player.PrimaryAttackState);
             return;
         }
-        else if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
+        else if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.secondary);
             stateMachine.ChangeState(player.SecondaryAttackState);

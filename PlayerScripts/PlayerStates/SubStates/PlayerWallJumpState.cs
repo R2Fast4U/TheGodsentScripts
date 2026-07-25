@@ -91,13 +91,13 @@ public class PlayerWallJumpState : PlayerAbilityState
         {
             isAbilityDone = true;
         }
-        // Check for attacks (allow interruption of wall jump)
-        else if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
+        // Check for attacks (allow interruption of wall jump, respecting the CanAttack gate)
+        else if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.primary);
             stateMachine.ChangeState(player.PrimaryAttackState);
         }
-        else if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
+        else if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.secondary);
             stateMachine.ChangeState(player.SecondaryAttackState);

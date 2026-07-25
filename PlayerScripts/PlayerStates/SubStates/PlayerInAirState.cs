@@ -71,13 +71,13 @@ public class PlayerInAirState : PlayerState
 
         // Check if enough time has passed since last wall jump
         bool canWallJump = Time.time - lastWallJumpTime > wallJumpCooldown && !player.wallJumpOnCooldown;
-                if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
+                if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.primary);
             stateMachine.ChangeState(player.PrimaryAttackState);
         }
-        
-        else if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
+
+        else if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.secondary);
             stateMachine.ChangeState(player.SecondaryAttackState);
@@ -135,7 +135,7 @@ public class PlayerInAirState : PlayerState
                 // buffering so inputs are edge-only and not applied later.
             }
         }
-        else if (warpInput && player.WarpState.CheckIfCanWarp())
+        else if (player.CanWarp && warpInput && player.WarpState.CheckIfCanWarp())
         {
             // consume the warp input so it doesn't fire again later (e.g., on landing)
             player.InputHandler.UseWarpInput();
@@ -145,7 +145,7 @@ public class PlayerInAirState : PlayerState
         {
             // Always allow air movement here
             player.Core.Movement.CheckIfShouldFlip(xInput);
-            player.Core.Movement.SetVelocityX(playerData.movementVelocity * xInput);
+            player.Core.Movement.SetVelocityX(player.MoveSpeed * xInput);
             player.Anim.SetFloat("yVelocity", player.Core.Movement.CurrentVelocity.y);
             player.Anim.SetFloat("xVelocity", Mathf.Abs(player.Core.Movement.CurrentVelocity.x));
         }

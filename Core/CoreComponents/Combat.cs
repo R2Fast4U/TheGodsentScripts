@@ -11,7 +11,11 @@ using UnityEngine;
 public class Combat : CoreComponent, IDamageable, IKnockbackable
 {
     [Header("Health")]
+    [Tooltip("Fallback health used only when no PlayerStats is available (e.g. non-player entities).")]
     [SerializeField] private float maxHealth = 100f;
+    [Tooltip("Optional. When set, health is read/written here so it persists across scenes. " +
+             "Auto-found from a PlayerInventory in parents if left empty.")]
+    [SerializeField] private PlayerStats stats;
 
     [Header("Knockback")]
     [Tooltip("Direction/shape of the knockback impulse. X is applied along the hit direction, Y is always up.")]
@@ -25,9 +29,13 @@ public class Combat : CoreComponent, IDamageable, IKnockbackable
     [SerializeField] private AudioClip[] hitSounds;
     [SerializeField] private AudioClip[] gruntSounds;
 
-    public float CurrentHealth { get; private set; }
-    public float MaxHealth => maxHealth;
-    public bool IsDead { get; private set; }
+    // Fallback health state, used only when no PlayerStats is assigned.
+    private float fallbackHealth;
+    private bool fallbackIsDead;
+
+    public float CurrentHealth => stats != null ? stats.CurrentHealth : fallbackHealth;
+    public float MaxHealth => stats != null ? stats.EffectiveMaxHealth : maxHealth;
+    public bool IsDead => stats != null ? stats.IsDead : fallbackIsDead;
 
     /// <summary>True while a knockback impulse is still in effect. States can read this to
     /// suspend player control (e.g. skip movement input) until the knockback finishes.</summary>
@@ -44,7 +52,19 @@ public class Combat : CoreComponent, IDamageable, IKnockbackable
     protected override void Awake()
     {
         base.Awake();
-        CurrentHealth = maxHealth;
+
+        // Prefer the shared, cross-scene stats. Auto-find from the player's inventory if unassigned.
+        if (stats == null)
+        {
+            var inventory = GetComponentInParent<PlayerInventory>();
+            if (inventory != null) stats = inventory.Stats;
+        }
+
+        if (stats != null)
+            stats.EnsureInitialized();
+        else
+            fallbackHealth = maxHealth;
+
         audioSource = GetComponentInParent<AudioSource>();
     }
 
@@ -59,8 +79,12 @@ public class Combat : CoreComponent, IDamageable, IKnockbackable
     {
         if (IsDead) return;
 
-        CurrentHealth -= amount;
-        Debug.Log($"{transform.root.name} took {amount} damage. Health: {CurrentHealth}/{maxHealth}");
+        if (stats != null)
+            stats.ModifyHealth(-amount);
+        else
+            fallbackHealth -= amount;
+
+        Debug.Log($"{transform.root.name} took {amount} damage. Health: {CurrentHealth}/{MaxHealth}");
 
         PlayHitFeedback();
         OnDamaged?.Invoke(amount, CurrentHealth);
@@ -84,7 +108,7 @@ public class Combat : CoreComponent, IDamageable, IKnockbackable
 
     private void Die()
     {
-        IsDead = true;
+        fallbackIsDead = true; // stats path derives IsDead from health directly
         IsKnockbackActive = false;
         OnDeath?.Invoke();
     }

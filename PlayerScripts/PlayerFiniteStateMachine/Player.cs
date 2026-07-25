@@ -37,6 +37,7 @@ public class Player : MonoBehaviour
     public Animator Anim { get; private set; }
     public Transform WarpDirectionIndicator { get; private set; }
     public PlayerInventory Inventory { get; private set; }
+    public PlayerStats Stats => Inventory != null ? Inventory.Stats : null;
     #endregion
 
     #region Check Transforms
@@ -50,6 +51,14 @@ public class Player : MonoBehaviour
     #region Other Variables
     public Vector2 CurrentVelocity { get;  set; }
     public int FacingDirection => Core.Movement.FacingDirection;
+
+    // Base movement speed scaled by any active speed multipliers in PlayerStats.
+    public float MoveSpeed => playerData.movementVelocity * (Stats != null ? Stats.SpeedMultiplier : 1f);
+
+    // Ability gates: allowed only when not disabled (CanAttack/CanWarp flag) AND the ability is
+    // equipped. When no PlayerStats is assigned, default to allowed so the player still works.
+    public bool CanAttack => Stats == null || (Stats.CanAttack && Stats.IsEquipped(AbilityType.Attack));
+    public bool CanWarp => Stats == null || (Stats.CanWarp && Stats.IsEquipped(AbilityType.Warp));
 
     // Flag set when a jump was cut (player released jump early) so gravity
     // adjustments can be applied across state transitions.
@@ -133,9 +142,25 @@ public class Player : MonoBehaviour
 
         StateMachine.Initialize(IdleState);
 
-        // React to incoming damage/knockback by entering the hurt state.
+        // React to incoming damage/knockback by entering the hurt state, and to death.
         if (Combat != null)
+        {
             Combat.OnDamaged += HandleDamaged;
+            Combat.OnDeath += HandleDeath;
+        }
+
+        // Only move to the saved checkpoint when we actually respawned/continued (not on a
+        // normal play or level entry). Otherwise the player spawns where it's placed in the scene.
+        bool respawning = GameManager.Instance != null && GameManager.Instance.ConsumePendingRespawn();
+        if (respawning && Stats != null && Stats.HasCheckpoint &&
+            Stats.LastCheckpointScene == UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)
+        {
+            transform.position = Stats.LastCheckpointPosition;
+        }
+
+        // Safety net: never spawn dead (e.g. stale health from a previous session/save).
+        if (Stats != null && Stats.CurrentHealth <= 0f)
+            Stats.RefillHealth();
 
         Core.Movement.RB.gravityScale = playerData.gravityScale;
 
@@ -176,7 +201,10 @@ public class Player : MonoBehaviour
     private void OnDestroy()
     {
         if (Combat != null)
+        {
             Combat.OnDamaged -= HandleDamaged;
+            Combat.OnDeath -= HandleDeath;
+        }
     }
 
     #endregion
@@ -187,10 +215,25 @@ public class Player : MonoBehaviour
     private void HandleDamaged(float amount, float currentHealth)
     {
         if (Combat != null && Combat.IsDead) return;
+
+        // Camera juice: shake + zoom out on every hit.
+        CinemachineOffsetController.Instance?.TriggerPlayerHit();
+
         // Already reacting to a hit — the fresh Knockback() call extends it.
         if (StateMachine.CurrentState == HurtState) return;
 
         StateMachine.ChangeState(HurtState);
+    }
+
+    // Invoked by Combat.OnDeath when health reaches zero.
+    private void HandleDeath()
+    {
+        // Stop the player and lock out control, then hand off to the game-over flow.
+        Core.Movement.SetVelocityZero();
+        if (InputHandler != null)
+            InputHandler.BlockInput();
+
+        GameManager.Instance?.TriggerGameOver();
     }
     #endregion
     #region Check Properties

@@ -20,7 +20,7 @@ public class PlayerMoveState : PlayerGroundedState
 
         player.Core.Movement.CheckIfShouldFlip(xInput);
 
-        player.Core.Movement.SetVelocityX(22f * xInput); // Hardcoded for testing, respects direction
+        player.Core.Movement.SetVelocityX(player.MoveSpeed * xInput); // playerData.movementVelocity * active speed multipliers
         if (xInput == 0 && !isExitingState)
         {
             stateMachine.ChangeState(player.IdleState);

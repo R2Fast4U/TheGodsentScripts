@@ -51,10 +51,18 @@ public class AgressiveWeapon : Weapon
         if (detectedDamageable.Count > 0)
             CinemachineOffsetController.Instance?.TriggerHitZoom();
 
+        float damage = details.damageAmount * GetDamageMultiplier();
         foreach (IDamageable item in detectedDamageable.ToList())
         {
-            item.Damage(details.damageAmount);
+            item.Damage(damage);
         }
+    }
+
+    // Scales dealt damage by the player's active damage multipliers (from PlayerStats).
+    private float GetDamageMultiplier()
+    {
+        Player player = state != null ? state.GetPlayer() : null;
+        return player != null && player.Stats != null ? player.Stats.DamageMultiplier : 1f;
     }
 
     public void DealDamageTo(Collider2D collision)
@@ -68,7 +76,7 @@ public class AgressiveWeapon : Weapon
         }
 
         int idx = Mathf.Clamp(attackCounter, 0, aggressiveWeaponData.AttackDetails.Length - 1);
-        damageable.Damage(aggressiveWeaponData.AttackDetails[idx].damageAmount);
+        damageable.Damage(aggressiveWeaponData.AttackDetails[idx].damageAmount * GetDamageMultiplier());
     }
 
     public void AddToDetected(Collider2D collision)

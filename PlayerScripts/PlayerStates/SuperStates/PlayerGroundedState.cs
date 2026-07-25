@@ -64,15 +64,15 @@ public class PlayerGroundedState : PlayerState
             lookDownHoldStartTime = -1f; // Released, reset timer
         }
 
-        if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
+        if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
         {
             lookUpHoldStartTime = -1f;
             lookDownHoldStartTime = -1f;
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.primary);
             stateMachine.ChangeState(player.PrimaryAttackState);
         }
-        
-        else if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
+
+        else if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
         {
             lookUpHoldStartTime = -1f;
             lookDownHoldStartTime = -1f;
@@ -140,7 +140,7 @@ public class PlayerGroundedState : PlayerState
             player.InAirState.StartCoyoteTime();
             stateMachine.ChangeState(player.InAirState);
         }
-        else if (warpInput && player.WarpState.CheckIfCanWarp())
+        else if (player.CanWarp && warpInput && player.WarpState.CheckIfCanWarp())
         {
             // consume the warp input edge so it doesn't persist into unrelated states
             player.InputHandler.UseWarpInput();

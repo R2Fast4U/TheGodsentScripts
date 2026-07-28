@@ -46,6 +46,9 @@ public class PlayerWarpState : PlayerAbilityState
         CanWarp = false;
 
         player.InputHandler.UseWarpInput();
+        // Warping off the ground must not leave a usable jump stored for mid-air.
+        player.JumpState.ClearJumpsLeft();
+        player.InputBuffer.ConsumeBufferedJump();
         isHolding = true;
         isDashing = false;
 
@@ -72,6 +75,12 @@ public class PlayerWarpState : PlayerAbilityState
     public override void Exit()
     {
         base.Exit();
+
+        // Don't let an attack button held during the warp fire an attack afterward (which would
+        // also inherit the warp's dash velocity and launch the player). A fresh press after the
+        // warp still attacks normally.
+        player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.primary);
+        player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.secondary);
 
         // restore physics/time
         Time.timeScale = 1f;

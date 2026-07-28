@@ -100,21 +100,27 @@ public class Movement : CoreComponent
         return workspace;
     }
 
-    // Snaps the player to a specific distance from the wall to ensure visual consistency
+    // Pins the player so wallCheck sits exactly 'snapDistance' from the wall. Uses the Rigidbody
+    // position (setting transform.position on a dynamic body is unreliable — physics treats
+    // rb.position as authoritative and depenetrates by a variable amount) and zeroes horizontal
+    // velocity so the pin doesn't drift. Vertical velocity (the slide) is preserved, so this is
+    // safe to call every physics step to keep the distance perfectly consistent.
     public void SnapToWall(float snapDistance)
     {
+        if (player == null || RB == null) return;
+
         Transform wallCheck = player.WallCheck;
         Vector2 direction = Vector2.right * player.FacingDirection;
         // Check a bit further than normal to ensure we find the wall
         float checkDist = playerData.wallCheckDistance * 1.5f;
         RaycastHit2D hit = Physics2D.Raycast(wallCheck.position, direction, checkDist, playerData.whatIsGround);
+        if (hit.collider == null) return;
 
-        if (hit.collider != null)
-        {
-            // Snap the player so wallCheck is 'snapDistance' away from the wall
-            float diff = hit.distance - snapDistance;
-            player.transform.position += (Vector3)(direction * diff);
-        }
+        // Snap the player so wallCheck is 'snapDistance' away from the wall
+        float diff = hit.distance - snapDistance;
+        RB.position += direction * diff;
+        RB.velocity = new Vector2(0f, RB.velocity.y);
+        CurrentVelocity = RB.velocity;
     }
     #endregion
 

@@ -14,5 +14,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   maxHealth: 100
   startingCoins: 0
-  defaultUnlockedAbilities: 000000000100000003000000040000000500000006000000
-  defaultEquippedAbilities: 03000000040000000500000006000000
+  allBaseAbilitiesUnlocked: 1
+  defaultUnlockedBase: 000000000100000002000000030000000400000005000000
+  defaultUnlockedSecondary: 
+  divineLibrary:
+  - {fileID: 11400000, guid: 1f871890e7a77024382b9200f5791179, type: 2}
+  defaultUnlockedDivine: []
+  defaultEquippedDivine: []
+  maxEquippedDivine: 2

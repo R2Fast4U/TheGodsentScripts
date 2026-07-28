@@ -2,26 +2,23 @@ using System.IO;
 using UnityEngine;
 
 /// <summary>
-/// Reads/writes a <see cref="SaveData"/> to a JSON file in Application.persistentDataPath.
-/// Static and stateless — call from anywhere. On desktop the file lives at:
-/// C:/Users/&lt;user&gt;/AppData/LocalLow/&lt;company&gt;/&lt;product&gt;/save.json
+/// Reads/writes a <see cref="SaveData"/> to a per-slot JSON file in Application.persistentDataPath.
+/// Static and stateless. Files are named save_0.json, save_1.json, ... one per save slot.
 /// </summary>
 public static class SaveSystem
 {
-    private const string FileName = "save.json";
+    private static string FilePath(int slot) => Path.Combine(Application.persistentDataPath, $"save_{slot}.json");
 
-    private static string FilePath => Path.Combine(Application.persistentDataPath, FileName);
+    public static bool HasSave(int slot = 0) => File.Exists(FilePath(slot));
 
-    public static bool HasSave() => File.Exists(FilePath);
-
-    public static void Save(SaveData data)
+    public static void Save(SaveData data, int slot = 0)
     {
         if (data == null) return;
         try
         {
             string json = JsonUtility.ToJson(data, prettyPrint: true);
-            File.WriteAllText(FilePath, json);
-            Debug.Log($"[SaveSystem] Saved to {FilePath}");
+            File.WriteAllText(FilePath(slot), json);
+            Debug.Log($"[SaveSystem] Saved slot {slot} to {FilePath(slot)}");
         }
         catch (System.Exception e)
         {
@@ -29,13 +26,12 @@ public static class SaveSystem
         }
     }
 
-    public static SaveData Load()
+    public static SaveData Load(int slot = 0)
     {
-        if (!HasSave()) return null;
+        if (!HasSave(slot)) return null;
         try
         {
-            string json = File.ReadAllText(FilePath);
-            return JsonUtility.FromJson<SaveData>(json);
+            return JsonUtility.FromJson<SaveData>(File.ReadAllText(FilePath(slot)));
         }
         catch (System.Exception e)
         {
@@ -44,11 +40,11 @@ public static class SaveSystem
         }
     }
 
-    public static void Delete()
+    public static void Delete(int slot = 0)
     {
         try
         {
-            if (HasSave()) File.Delete(FilePath);
+            if (HasSave(slot)) File.Delete(FilePath(slot));
         }
         catch (System.Exception e)
         {

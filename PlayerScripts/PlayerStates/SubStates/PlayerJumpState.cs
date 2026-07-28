@@ -87,5 +87,9 @@ public class PlayerJumpState : PlayerAbilityState
     public bool CanJump() => amountOfJumpsLeft > 0;
     public void ResetAmountOfJumpsLeft() => amountOfJumpsLeft = playerData.amountOfJumps;
     public void DecreaseAmountOfJumpsLeft() => amountOfJumpsLeft--;
+    /// <summary>Spends all remaining jumps — used when the player leaves the ground for a
+    /// non-jump reason (knockback, warp) so no stored jump can fire mid-air. Grounded states
+    /// restore it via ResetAmountOfJumpsLeft on landing.</summary>
+    public void ClearJumpsLeft() => amountOfJumpsLeft = 0;
     public bool ShouldCutJump() => jumpCut;
 }

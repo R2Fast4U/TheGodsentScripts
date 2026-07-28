@@ -56,54 +56,19 @@ public class MusicManager : MonoBehaviour
 
     void Awake()
     {
-        if (Instance != null && Instance != this)
-        {
-            // Prioritize the instance that actually has configuration/clips assigned
-            bool existingHasClips = Instance._peacefulMusic != null && Instance._peacefulMusic.Count > 0;
-            bool thisHasClips = _peacefulMusic != null && _peacefulMusic.Count > 0;
-
-            if (!existingHasClips && thisHasClips)
-            {
-                Instance.DestroyDuplicate();
-                Instance = this;
-            }
-            else
-            {
-                DestroyDuplicate();
-                return;
-            }
-        }
-        else
-        {
-            Instance = this;
-        }
-
-        // To make DontDestroyOnLoad safe for components on child GameObjects
-        if (transform.parent == null)
-        {
-            DontDestroyOnLoad(gameObject);
-        }
-        else
-        {
-            transform.parent = null;
-            DontDestroyOnLoad(gameObject);
-        }
-
+        // Scene-scoped music: this manager lives and dies with its scene, so each scene plays its
+        // own chosen tracks. (Was a DontDestroyOnLoad singleton — made per-scene by request.)
+        // Instance points at the current scene's manager; the newest one wins.
+        Instance = this;
         ConfigureAudioSources();
     }
 
-    private void DestroyDuplicate()
+    private void OnDestroy()
     {
-        // If this script is attached to a shared GameObject (like a background quad or player),
-        // only destroy this component instance to prevent losing visual elements/colliders.
-        if (GetComponent<Renderer>() != null || GetComponent<Collider>() != null || transform.childCount > 0 || transform.parent != null)
-        {
-            Destroy(this);
-        }
-        else
-        {
-            Destroy(gameObject);
-        }
+        // Only clear if we're still the current instance. On a scene change the new scene's manager
+        // sets Instance in its Awake before this old one's OnDestroy runs, so this won't null it.
+        if (Instance == this)
+            Instance = null;
     }
 
     void Start()

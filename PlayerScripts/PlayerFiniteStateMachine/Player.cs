@@ -24,6 +24,7 @@ public class Player : MonoBehaviour
     public PlayerAttackState PrimaryAttackState { get; private set; }
     public PlayerAttackState SecondaryAttackState { get; private set; }
     public PlayerHurtState HurtState { get; private set; }
+    public PlayerDeathState DeathState { get; private set; }
 
     [SerializeField] private PlayerData playerData;
     public PlayerData PlayerData => playerData;
@@ -57,8 +58,8 @@ public class Player : MonoBehaviour
 
     // Ability gates: allowed only when not disabled (CanAttack/CanWarp flag) AND the ability is
     // equipped. When no PlayerStats is assigned, default to allowed so the player still works.
-    public bool CanAttack => Stats == null || (Stats.CanAttack && Stats.IsEquipped(AbilityType.Attack));
-    public bool CanWarp => Stats == null || (Stats.CanWarp && Stats.IsEquipped(AbilityType.Warp));
+    public bool CanAttack => Stats == null || (Stats.CanAttack && Stats.IsSecondaryUnlocked(SecondaryAbility.Attack));
+    public bool CanWarp => Stats == null || (Stats.CanWarp && Stats.IsSecondaryUnlocked(SecondaryAbility.Warp));
 
     // Flag set when a jump was cut (player released jump early) so gravity
     // adjustments can be applied across state transitions.
@@ -77,6 +78,11 @@ public class Player : MonoBehaviour
     [SerializeField] private Transform feetParticlesPosition;
     [SerializeField] private ParticleSystem lightParticlesPrefab;
     [SerializeField] private Transform lightParticlesPosition;
+
+    [Header("Death")]
+    [SerializeField] private GameObject deathParticlesPrefab;
+    [Tooltip("Where death particles spawn. Defaults to the player's position if empty.")]
+    [SerializeField] private Transform deathParticlesPosition;
     #endregion
 
     #region Unity Callbacks
@@ -105,6 +111,7 @@ public class Player : MonoBehaviour
         PrimaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");
         SecondaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");
         HurtState = new PlayerHurtState(this, StateMachine, playerData, "hurt");
+        DeathState = new PlayerDeathState(this, StateMachine, playerData, "dead");
     }
 
     private void Start()
@@ -228,11 +235,16 @@ public class Player : MonoBehaviour
     // Invoked by Combat.OnDeath when health reaches zero.
     private void HandleDeath()
     {
-        // Stop the player and lock out control, then hand off to the game-over flow.
-        Core.Movement.SetVelocityZero();
-        if (InputHandler != null)
-            InputHandler.BlockInput();
+        // Spawn death particles.
+        if (deathParticlesPrefab != null)
+        {
+            Vector3 pos = deathParticlesPosition != null ? deathParticlesPosition.position : transform.position;
+            Instantiate(deathParticlesPrefab, pos, Quaternion.identity);
+        }
 
+        // Enter the death state (plays the death animation and freezes control), then hand off
+        // to the game-over flow (death sound, fade, screen).
+        StateMachine.ChangeState(DeathState);
         GameManager.Instance?.TriggerGameOver();
     }
     #endregion

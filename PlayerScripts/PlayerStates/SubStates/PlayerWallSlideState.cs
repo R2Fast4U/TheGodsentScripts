@@ -107,5 +107,11 @@ public class PlayerWallSlideState : PlayerTouchingWallState
     public override void PhysicsUpdate()
     {
         base.PhysicsUpdate();
+
+        // Keep the player pinned at a constant distance from the wall every physics step, so the
+        // snap is consistent regardless of entry speed/overlap. Only X is pinned; the vertical
+        // slide is untouched.
+        if (isTouchingWall && !isExitingState)
+            player.Core.Movement.SnapToWall(0.1f);
     }
-} 
+}

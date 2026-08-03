@@ -1,144 +1,225 @@
-# Unity 2D Platformer - Improved Player Controller
+# The Godsent — Scripts Reference
 
-## Overview
-This is an improved 2D platformer player controller with Hollow Knight-inspired movement mechanics. The controller features responsive input handling, variable jump heights, smooth wall sliding, and precise wall jumping.
+2D action-platformer built in Unity. This README documents every C# script in `Assets/Scripts/`.
 
-## Key Features
+---
 
-### 🎮 Responsive Controls
-- **Variable Jump Heights**: Hold jump button for higher jumps, tap for short hops
-- **Input Buffering**: Jump inputs are buffered for more forgiving timing
-- **Smooth Movement**: Responsive horizontal movement with proper acceleration
+## Architecture Overview
 
-### 🧱 Wall Mechanics
-- **Wall Sliding**: Smooth wall sliding with reduced gravity
-- **Wall Jumping**: Precise wall jumping with directional control
-- **Wall Detection**: Improved wall detection with visual debugging
-
-### ⚡ Performance Optimizations
-- **Efficient FSM**: Clean state machine architecture
-- **Optimized Physics**: Smart gravity scaling based on movement state
-- **Reduced Debug Spam**: Cleaner logging for better performance
-
-## Setup Instructions
-
-### 1. Required Components
-Add these components to your Player GameObject:
-- `Player` (main controller)
-- `PlayerInputHandler` (input processing)
-- `InputBuffer` (input buffering)
-- `Rigidbody2D` (physics)
-- `Animator` (animations)
-- `Collider2D` (collision detection)
-
-### 2. Transform Setup
-Create and assign these transforms as children of the Player:
-- `GroundCheck`: Position at player's feet for ground detection
-- `WallCheck`: Position at player's side for wall detection
-
-### 3. PlayerData Configuration
-Create a PlayerData ScriptableObject with these recommended values:
 ```
-Movement Velocity: 12
-Jump Velocity: 16
-Wall Jump Velocity: 14
-Wall Jump Time: 0.3
-Ground Check Radius: 0.2
-Wall Check Distance: 0.6
-Coyote Time: 0.15
-Wall Slide Velocity: 4
-Gravity Scale: 3
+MonoBehaviour
+├── Player                    — Character controller with hierarchical finite state machine
+├── Enemy / Chomper           — Enemy base class + concrete enemy with patrol, damage, and death
+├── Core / CoreComponents     — Shared physics/movement/collision system (used by Player + enemies)
+├── Weapons                   — Weapon base + melee damage with combo system
+├── Audio Managers            — SFX pool, music playlists with crossfade, animation-driven audio
+├── World Behaviour           — Parallax backgrounds, camera, particles, scene loading
+└── Interfaces                — IDamageable contract shared by Player, enemies, weapons
 ```
 
-### 4. Input System Setup
-Ensure your Input Actions asset has:
-- **Movement**: Vector2 input (WASD/Arrow Keys)
-- **Jump**: Button input (Space/Gamepad South)
+---
 
-## Architecture
+## Player System
 
-### State Machine Structure
+### Finite State Machine
+
+| File | Type | Purpose |
+|---|---|---|
+| `Player.cs` | MB | Root component. Owns all states, Core/Input/Inventory, check transforms, animation trigger relay. |
+| `PlayerStateMachine.cs` | Pure | `Initialize(State)` → `ChangeState(State)`. Exits old, enters new. Clears jump input on transition. |
+| `PlayerState.cs` | Pure | Base state. Virtuals: `Enter()`, `Exit()`, `LogicUpdate()`, `PhysicsUpdate()`, `AnimationTrigger()`, `AnimationFinishTrigger()`. Sets/clears animation bools. |
+
+### Super States (abstract groups)
+
+| File | Purpose |
+|---|---|
+| `PlayerGroundedState.cs` | Jump, attack, look up/down hold, warp, fall-to-air transitions |
+| `PlayerAbilityState.cs` | Tracks `isAbilityDone`, transitions back to Idle/Move/InAir |
+| `PlayerTouchingWallState.cs` | Shared wall state logic: xInput, jumpInput, grounded, touchingWall |
+
+### Sub States
+
+| File | Purpose |
+|---|---|
+| `PlayerIdleState.cs` | Zero velocity, transitions to Move on horizontal input |
+| `PlayerMoveState.cs` | Horizontal movement with flip, returns to Idle on no input |
+| `PlayerJumpState.cs` | Variable-height jump, air control, attack interruption |
+| `PlayerInAirState.cs` | Coyote time, air movement, wall grab/slide/ledge climb detection |
+| `PlayerLandState.cs` | Brief landing transition, consumes jump input |
+| `PlayerWallGrabState.cs` | Hold stationary on wall, wall jump or release |
+| `PlayerWallSlideState.cs` | Slide down wall, fast on down-press, loop audio |
+| `PlayerWallJumpState.cs` | Angled velocity off wall, lockout timer, air control |
+| `PlayerLedgeClimbState.cs` | Auto-climb with position interpolation |
+| `PlayerLookUpState.cs` | Cinemachine camera offset up |
+| `PlayerLookDownState.cs` | Cinemachine camera offset down |
+| `PlayerWarpState.cs` | Slow-time aim, dash on release/timeout, cooldown |
+| `PlayerAttackState.cs` | Weapon parenting, combo counter, flip grace period |
+
+### Data & Input
+
+| File | Type | Purpose |
+|---|---|---|
+| `PlayerData.cs` | SO | All player tuning: movement speed, jump force, gravity multipliers, wall jump, warp, attack timings |
+| `PlayerInputHandler.cs` | MB | Unity Input System bridge: movement, jump, warp, primary/secondary attack, input blocking |
+| `InputBuffer.cs` | MB | Soft buffer for jump/wall-jump with configurable expiry window |
+
+### Inventory & Weapons
+
+| File | Type | Purpose |
+|---|---|---|
+| `PlayerInventory.cs` | MB | Array of Weapon references |
+| `Weapon.cs` | MB | Base weapon: activation, attack counter, animators, animation relay triggers |
+| `AgressiveWeapon.cs` | MB | Melee weapon: tracks IDamageable targets, applies damage from data |
+| `WeaponAnimationRelay.cs` | MB | Routes animation events to parent Weapon |
+| `WeaponHitboxToWeapon.cs` | MB | Forwards collision enter/exit to AgressiveWeapon |
+| `SO_WeaponData.cs` | SO | Base weapon data: attack count, movement speed per attack |
+| `SO_AggressiveWeaponData.cs` | SO | Adds `WeaponAttackDetails[]` (damage amount per combo hit) |
+| `AttackDetails.cs` | Struct | `WeaponAttackDetails` (name, speed, damage, position) |
+
+---
+
+## Core System (Player + Enemy shared)
+
+| File | Type | Purpose |
+|---|---|---|
+| `Core.cs` | MB | Top-level: locates child `Movement` and `CollisionSenses` |
+| `CoreComponent.cs` | MB | Base for sub-components: finds parent Core |
+| `Movement.cs` | MB | Rigidbody2D velocity, facing direction, gravity adjustment, wall snap, flip |
+| `CollisionSenses.cs` | MB | Ground/wall/ledge detection via raycasts |
+
+---
+
+## Enemy System
+
+### Base
+
+| File | Type | Purpose |
+|---|---|---|
+| `Enemy.cs` | MB | Walking/Knockback/Dead state machine, touch damage, ground/wall detection, `IDamageable.Damage()`, hit feedback |
+
+### Chomper (concrete enemy)
+
+| File | Type | Purpose |
+|---|---|---|
+| `Chomper.cs` | MB | Robot enemy. Flip animation on obstacle, footstep/death sounds, sprite flip, particle death FX. Only Inspector fields — all config in one place. |
+
+### Other Enemies
+
+| File | Type | Purpose |
+|---|---|---|
+| `CombatTestDummy.cs` | MB | Training dummy: plays hit/grunt sounds and animation on damage |
+| `EnemyPatrol.cs` | MB | Simple waypoint patrol enemy (test) |
+| `Launcher.cs` | MB | Fires bullet prefabs on a timed schedule |
+| `Bullet.cs` | MB | Linear projectile with lifetime self-destruct |
+| `HitParticleController.cs` | MB | Auto-destroys hit particle after animation ends |
+
+---
+
+## Audio System
+
+### Music
+
+| File | Type | Purpose |
+|---|---|---|
+| `MusicManager.cs` | MB | Singleton. Peaceful/combat/ambience playlists, crossfade transitions, AudioMixer snapshots, overlay support |
+
+### SFX
+
+| File | Type | Purpose |
+|---|---|---|
+| `AudioManager.cs` | MB | Static SFX pool: plays sounds by enum, volume config, wall-slide looping, auto-pool return |
+| `PlayerAudioManager.cs` | MB | Bridge on Player: `PlayAttack()`, `PlayJump()`, `PlayHurt()`, etc. |
+| `PlaySoundEnter.cs` | SMB | Plays a sound on animator state enter |
+| `PlaySoundExit.cs` | SMB | Plays a sound on animator state exit |
+| `PlayJump.cs` | MB | Animation event → plays jump SFX |
+| `PlayFootstep.cs` | MB | Animation event → plays walk SFX |
+
+---
+
+## World Behaviour
+
+### Camera
+
+| File | Purpose |
+|---|---|
+| `CinemachineOffsetController.cs` | Singleton. Vertical camera offset + "hit zoom" punch when player lands attacks |
+| `CameraFollow.cs` | Legacy (commented out) |
+| `CameraAspectRatio.cs` | Legacy (commented out) |
+
+### Parallax
+
+| File | Purpose |
+|---|---|
+| `GalaxyBGController.cs` | Infinite tiled background with organic drift + UV rotation |
+| `BGController.cs` | 5-layer parallax with motion drift, velocity reaction, UV zoom |
+| `ParrallaxBGFinal.cs` | Simple 2D parallax with factor slider and smoothing |
+| `ParallaxBackground.cs` | Delegates camera delta to child ParallaxLayer components |
+| `ParallaxLayer.cs` | Single parallax layer |
+| `ParallaxCamera.cs` | Fires camera delta event each frame |
+| `ZBasedParallax.cs` | Parallax driven by object Z-depth |
+| `ZBasedBlur.cs` | Distance-based blur via MaterialPropertyBlock |
+
+### Particles
+
+| File | Purpose |
+|---|---|
+| `ParticleEffectManager.cs` | Dictionary-based spawner: dust, jump sparkles, explosions, trails |
+| `ParticleController.cs` | Configurable trigger: play on start/collision/trigger, follow targets, auto-destroy |
+| `AmbientParticleSystem.cs` | Pools ambient particles around player with distance culling |
+| `AmbientParticle.cs` | Floating/rotating/pulsing/fading ambient particle |
+| `ButterflyParticle.cs` | Animated butterfly with wandering flight, landing, fading |
+
+### Other
+
+| File | Purpose |
+|---|---|
+| `WaterRippleUpdater.cs` | Feeds time into ripple shader |
+| `LoadScene.cs` | Loads scene by name on click |
+| `Tiles.cs` | Centers tilemap and scales it |
+
+---
+
+## Interfaces
+
+| File | Purpose |
+|---|---|
+| `IDamageable.cs` | `void Damage(float amount)` — implemented by Player, Enemy, CombatTestDummy |
+
+---
+
+## Utilities
+
+| File | Type | Purpose |
+|---|---|---|
+| `CoroutineRunner.cs` | MB | Singleton for running coroutines from inactive objects (DontDestroyOnLoad) |
+
+---
+
+## Prefab Setup: Chomper
+
 ```
-PlayerState (Base)
-├── PlayerGroundedState
-│   ├── PlayerIdleState
-│   └── PlayerMoveState
-├── PlayerInAirState
-├── PlayerAbilityState
-│   ├── PlayerJumpState
-│   ├── PlayerWallJumpState
-│   └── PlayerLandState
-└── PlayerTouchingWallState
-    ├── PlayerWallSlideState
-    ├── PlayerWallGrabState
-    └── PlayerWallClimbState
+Chomper (root)
+├── Chomper.cs          ← ALL Inspector fields
+├── Animator, SpriteRenderer, Rigidbody2D, AudioSource, BoxCollider2D
+├── GroundCheck         (empty child, center bottom)
+├── WallCheck           (empty child, front edge)
+└── TouchDamageCheck    (empty child, optional)
 ```
 
-### Key Components
-- **Player**: Main controller managing state machine and physics
-- **PlayerInputHandler**: Processes Unity Input System events
-- **InputBuffer**: Provides input buffering for responsive controls
-- **PlayerData**: ScriptableObject containing all movement parameters
+## Prefab Setup: Player
 
-## Improvements Made
-
-### 1. Fixed Jump Mechanics
-- **Variable Jump Heights**: Jump height now depends on how long the jump button is held
-- **Better Gravity Scaling**: More responsive gravity changes for snappy feel
-- **Input Buffering**: Jump inputs are buffered for more forgiving timing
-
-### 2. Improved Wall Interactions
-- **Better Wall Detection**: More reliable wall detection with proper raycasting
-- **Smooth Wall Sliding**: Improved wall slide mechanics with reduced velocity
-- **Responsive Wall Jumps**: Faster wall jump recovery and better control
-
-### 3. Enhanced Input Handling
-- **Clean Input Processing**: Removed conflicting input logic
-- **Input Buffering**: Added input buffer for more responsive controls
-- **Better State Transitions**: Smoother transitions between states
-
-### 4. Performance Optimizations
-- **Removed Debug Spam**: Cleaned up excessive logging
-- **Optimized Gravity**: More efficient gravity scaling system
-- **Better Code Structure**: Cleaner, more maintainable code
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Player not moving**
-   - Check if PlayerInputHandler is attached
-   - Verify Input Actions are properly configured
-   - Ensure PlayerData is assigned
-
-2. **Wall jumping not working**
-   - Verify wallCheck transform is positioned correctly
-   - Check wallCheckDistance in PlayerData
-   - Ensure ground layer mask is set correctly
-
-3. **Jump feels unresponsive**
-   - Adjust inputHoldTime in PlayerInputHandler
-   - Check gravity scale values in PlayerData
-   - Verify input buffering is working
-
-### Debug Tools
-- Wall detection rays are drawn in Scene view (red/blue)
-- Animation parameters are set for debugging
-- Console logs for state transitions
-
-## Customization
-
-### Adjusting Feel
-- **Movement Speed**: Modify `movementVelocity` in PlayerData
-- **Jump Height**: Adjust `jumpVelocity` and gravity scaling
-- **Wall Jump Distance**: Change `wallJumpVelocity` and `wallJumpAngle`
-- **Input Responsiveness**: Modify buffer times in InputBuffer
-
-### Adding New States
-1. Create new state class inheriting from appropriate base state
-2. Add state to Player class state variables
-3. Initialize in Awake() method
-4. Add transition logic in existing states
-
-## Credits
-This controller is inspired by Hollow Knight's movement system and modern platformer design principles. The FSM architecture provides a solid foundation for expanding with additional abilities and mechanics. 
+```
+Player (root)
+├── Player.cs, PlayerInputHandler, InputBuffer, PlayerInventory, PlayerAudioManager
+├── Animator, Rigidbody2D, AudioSource
+├── Core (child)
+│   ├── Core.cs
+│   ├── Movement.cs
+│   └── CollisionSenses.cs
+│       ├── GroundCheck
+│       ├── WallCheck
+│       └── LedgeCheck
+├── GroundCheck, WallCheck, LedgeCheck (check transforms)
+├── WarpDirectionIndicator
+└── FeetParticlesPosition, HeadParticlesPosition (empty children for particle placement)
+```

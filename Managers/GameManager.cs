@@ -70,6 +70,7 @@ public class GameManager : MonoBehaviour
 
     private bool isGameOver;
     private bool pendingRespawn;
+    private string pendingSpawnId;
 
     /// <summary>True (once) if the next scene load is a respawn/continue, so the player should
     /// move to its checkpoint. Consumed by the Player on spawn.</summary>
@@ -78,6 +79,22 @@ public class GameManager : MonoBehaviour
         if (!pendingRespawn) return false;
         pendingRespawn = false;
         return true;
+    }
+
+    /// <summary>The spawn-point id to place the player at on the next scene (from a SceneDoor),
+    /// or null. Consumed by the Player on spawn.</summary>
+    public string ConsumePendingSpawnId()
+    {
+        var id = pendingSpawnId;
+        pendingSpawnId = null;
+        return id;
+    }
+
+    /// <summary>Loads a scene (with fade) and places the player at the named spawn point there.</summary>
+    public void LoadSceneToSpawn(string scene, string spawnId)
+    {
+        pendingSpawnId = spawnId;
+        LoadSceneInternal(scene);
     }
 
     // Ensures the manager exists regardless of which scene Play starts in.

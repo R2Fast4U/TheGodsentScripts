@@ -21,6 +21,8 @@ public class PlayerInputHandler : MonoBehaviour
     public bool WarpInput { get; private set; }
     public bool warpHold { get; private set; }
 
+    public bool InteractInput { get; private set; }
+
     public bool[] AttackInputs { get; private set; }// 0: Primary Attack, 1: Secondary Attack
     public int AttackDirectionY { get; private set; }
 
@@ -29,6 +31,7 @@ public class PlayerInputHandler : MonoBehaviour
     [SerializeField] private float inputHoldTime = 0.08f; // reduced for snappier warp responsiveness
     private float jumpInputStartTime;
     private float warpInputStartTime;
+    private float interactInputStartTime;
 
 
     private void Start()
@@ -58,6 +61,11 @@ public class PlayerInputHandler : MonoBehaviour
             JumpInput = false;
         }
 
+        // Interact is an edge that auto-expires like the others.
+        if (InteractInput && Time.unscaledTime >= interactInputStartTime + inputHoldTime)
+        {
+            InteractInput = false;
+        }
     }
 
     public void OnPrimaryAttackInput(InputAction.CallbackContext context)
@@ -194,6 +202,25 @@ public class PlayerInputHandler : MonoBehaviour
     public void UseWarpInput()
     {
         WarpInput = false; // Consume the input
+    }
+
+    public void OnInteractInput(InputAction.CallbackContext context)
+    {
+        if (InputBlocked) return;
+        if (context.started)
+        {
+            InteractInput = true;
+            interactInputStartTime = Time.unscaledTime;
+        }
+        else if (context.canceled)
+        {
+            InteractInput = false;
+        }
+    }
+
+    public void UseInteractInput()
+    {
+        InteractInput = false; // Consume the input
     }
 
     public void UseAttackInput(CombatInputs input)

@@ -20,7 +20,9 @@ public enum SoundType
     WALLJUMP,
     WALLLAND,
     LOOKUP,
-    LOOKDOWN
+    LOOKDOWN,
+    CHECKPOINT,
+    CHECKPOINTEXIT,
 }
 [RequireComponent(typeof(AudioSource))]
 public class AudioManager : MonoBehaviour

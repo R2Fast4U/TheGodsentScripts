@@ -80,4 +80,16 @@ public class PlayerData : ScriptableObject
     [Header("Ledge Climb State")]
     public Vector2 startOffset;
     public Vector2 stopOffset;
+
+    [Header("Checkpoint State")]
+    [Tooltip("How long the player stays sitting (checkpoint bool true) before standing.")]
+    public float checkpointDuration = 3f;
+    [Tooltip("Time the stand-up plays before control returns. Match the PlayerStand clip length.")]
+    public float checkpointStandDuration = 0.6f;
+    [Tooltip("Camera zoom-in amount during a checkpoint (orthographic size / FOV units).")]
+    public float checkpointZoomAmount = 1f;
+    [Tooltip("How fast the camera zooms IN at the start of a checkpoint (0 = instant).")]
+    public float checkpointZoomInSpeed = 4f;
+    [Tooltip("How fast the camera eases back after the checkpoint zoom.")]
+    public float checkpointZoomRecoverySpeed = 4f;
 }

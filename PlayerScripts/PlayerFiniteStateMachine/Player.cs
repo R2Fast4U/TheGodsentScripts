@@ -25,6 +25,7 @@ public class Player : MonoBehaviour
     public PlayerAttackState SecondaryAttackState { get; private set; }
     public PlayerHurtState HurtState { get; private set; }
     public PlayerDeathState DeathState { get; private set; }
+    public PlayerCheckpointState CheckpointState { get; private set; }
 
     [SerializeField] private PlayerData playerData;
     public PlayerData PlayerData => playerData;
@@ -112,6 +113,7 @@ public class Player : MonoBehaviour
         SecondaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");
         HurtState = new PlayerHurtState(this, StateMachine, playerData, "hurt");
         DeathState = new PlayerDeathState(this, StateMachine, playerData, "dead");
+        CheckpointState = new PlayerCheckpointState(this, StateMachine, playerData, "checkpoint");
     }
 
     private void Start()
@@ -156,11 +158,19 @@ public class Player : MonoBehaviour
             Combat.OnDeath += HandleDeath;
         }
 
-        // Only move to the saved checkpoint when we actually respawned/continued (not on a
-        // normal play or level entry). Otherwise the player spawns where it's placed in the scene.
+        // Positioning priority: a SceneDoor's named spawn point, then a checkpoint respawn,
+        // otherwise the player stays where it's placed in the scene.
+        string spawnId = GameManager.Instance != null ? GameManager.Instance.ConsumePendingSpawnId() : null;
+        PlayerSpawnPoint doorSpawn = !string.IsNullOrEmpty(spawnId) ? PlayerSpawnPoint.Find(spawnId) : null;
+
         bool respawning = GameManager.Instance != null && GameManager.Instance.ConsumePendingRespawn();
-        if (respawning && Stats != null && Stats.HasCheckpoint &&
-            Stats.LastCheckpointScene == UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)
+
+        if (doorSpawn != null)
+        {
+            transform.position = doorSpawn.transform.position;
+        }
+        else if (respawning && Stats != null && Stats.HasCheckpoint &&
+                 Stats.LastCheckpointScene == UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)
         {
             transform.position = Stats.LastCheckpointPosition;
         }
@@ -246,6 +256,14 @@ public class Player : MonoBehaviour
         // to the game-over flow (death sound, fade, screen).
         StateMachine.ChangeState(DeathState);
         GameManager.Instance?.TriggerGameOver();
+    }
+
+    /// <summary>Called by a Checkpoint trigger to play the checkpoint animation.</summary>
+    public void EnterCheckpoint()
+    {
+        if (Combat != null && Combat.IsDead) return;
+        if (StateMachine.CurrentState == CheckpointState) return;
+        StateMachine.ChangeState(CheckpointState);
     }
     #endregion
     #region Check Properties

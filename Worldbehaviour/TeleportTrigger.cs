@@ -1,4 +1,5 @@
 using UnityEngine;
+using Cinemachine;
 
 /// <summary>
 /// A trigger volume that teleports whatever enters it (the player) to a destination transform,
@@ -52,8 +53,25 @@ public class TeleportTrigger : MonoBehaviour
 
     private void Teleport(Transform toMove, Rigidbody2D body)
     {
-        toMove.position = destination.position;
+        // Keep the player's current Z so they stay on the gameplay plane. Copying the
+        // destination's Z can pull them off-plane, which reads as a camera zoom and breaks
+        // the Z-based parallax/blur.
+        Vector3 target = new Vector3(destination.position.x, destination.position.y, toMove.position.z);
+        Vector3 delta = target - toMove.position;
+
+        toMove.position = target;
         if (body != null && !preserveVelocity)
             body.velocity = Vector2.zero;
+
+        // Tell Cinemachine the follow target warped, so the camera snaps by the same delta
+        // instead of slowly damping across the whole teleport distance.
+        var cam = CinemachineOffsetController.Instance != null
+            ? CinemachineOffsetController.Instance.virtualCamera
+            : null;
+        if (cam != null)
+        {
+            Transform warpTarget = cam.Follow != null ? cam.Follow : toMove;
+            cam.OnTargetObjectWarped(warpTarget, delta);
+        }
     }
 }

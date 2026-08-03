@@ -39,11 +39,14 @@ public class SceneLoader : MonoBehaviour
         yield return FadeFromBlack();
     }
 
-    public IEnumerator FadeToBlack()
+    public IEnumerator FadeToBlack() => FadeToBlack(fadeDuration);
+
+    /// <summary>Fade to black over a specific duration (e.g. a slower game-over fade).</summary>
+    public IEnumerator FadeToBlack(float duration)
     {
         if (fadeGroup == null) yield break;
         fadeGroup.blocksRaycasts = true;
-        yield return Fade(fadeGroup.alpha, 1f, fadeDuration);
+        yield return Fade(fadeGroup.alpha, 1f, duration);
     }
 
     public IEnumerator FadeFromBlack()

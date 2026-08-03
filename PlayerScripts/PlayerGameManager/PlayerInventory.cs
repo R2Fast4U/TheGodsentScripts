@@ -41,23 +41,34 @@ public class PlayerInventory : MonoBehaviour
     }
     #endregion
 
-    #region Abilities
-    public bool IsAbilityUnlocked(AbilityType ability) => stats != null && stats.IsUnlocked(ability);
-    public bool IsAbilityEquipped(AbilityType ability) => stats != null && stats.IsEquipped(ability);
+    #region Base Abilities (movement kit)
+    public bool IsBaseUnlocked(BaseAbility ability) => stats != null && stats.IsBaseUnlocked(ability);
+    public void UnlockBase(BaseAbility ability) => stats?.UnlockBase(ability);
+    #endregion
 
-    public void UnlockAbility(AbilityType ability) => stats?.Unlock(ability);
+    #region Secondary Abilities (permanent once unlocked)
+    public bool IsSecondaryUnlocked(SecondaryAbility ability) => stats != null && stats.IsSecondaryUnlocked(ability);
+    public void UnlockSecondary(SecondaryAbility ability) => stats?.UnlockSecondary(ability);
+    #endregion
 
-    /// <summary>Equips an ability; returns false if it isn't unlocked (or no stats assigned).</summary>
-    public bool EquipAbility(AbilityType ability) => stats != null && stats.Equip(ability);
+    #region Divine Interventions (equip up to max)
+    public bool IsDivineUnlocked(SO_DivineIntervention divine) => stats != null && stats.IsDivineUnlocked(divine);
+    public bool IsDivineEquipped(SO_DivineIntervention divine) => stats != null && stats.IsDivineEquipped(divine);
+    public bool DivineSlotsFull => stats != null && stats.DivineSlotsFull;
 
-    public void UnequipAbility(AbilityType ability) => stats?.Unequip(ability);
+    public void UnlockDivine(SO_DivineIntervention divine) => stats?.UnlockDivine(divine);
 
-    /// <summary>Unlocks and immediately equips an ability (e.g. picking up a new power).</summary>
-    public void UnlockAndEquip(AbilityType ability)
+    /// <summary>Equips a divine intervention; returns false if not unlocked or slots are full.</summary>
+    public bool EquipDivine(SO_DivineIntervention divine) => stats != null && stats.EquipDivine(divine);
+
+    public void UnequipDivine(SO_DivineIntervention divine) => stats?.UnequipDivine(divine);
+
+    /// <summary>Unlocks a divine and equips it if there's a free slot (e.g. picking one up).</summary>
+    public void UnlockAndEquipDivine(SO_DivineIntervention divine)
     {
         if (stats == null) return;
-        stats.Unlock(ability);
-        stats.Equip(ability);
+        stats.UnlockDivine(divine);
+        stats.EquipDivine(divine);
     }
     #endregion
 }

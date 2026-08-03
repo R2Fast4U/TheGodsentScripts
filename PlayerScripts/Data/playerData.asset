@@ -49,3 +49,8 @@ MonoBehaviour:
   wallStickOffset: 0.08
   startOffset: {x: 1, y: 0}
   stopOffset: {x: 0.5, y: 3}
+  checkpointDuration: 4
+  checkpointStandDuration: 0.6
+  checkpointZoomAmount: 4
+  checkpointZoomInSpeed: 1
+  checkpointZoomRecoverySpeed: 1

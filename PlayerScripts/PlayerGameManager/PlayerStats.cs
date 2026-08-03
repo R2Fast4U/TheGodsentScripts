@@ -6,12 +6,14 @@ using UnityEngine;
 /// Persistent player state shared across scenes. Lives as a ScriptableObject asset so its
 /// values survive scene loads within a play session.
 ///
-/// Design-time config (maxHealth, starting coins, default abilities) is serialized and
-/// authored in the Inspector. Runtime values (current health/coins, active multipliers,
-/// unlocked/equipped abilities, gates, active weapon) are intentionally NOT serialized:
-/// they reset at the start of each play session and are (re)built by <see cref="EnsureInitialized"/>,
-/// so they persist between scenes but never get baked into the asset. Load a save file into
-/// these via the setters/Unlock/Equip calls when you add a save system.
+/// Abilities are split into three groups:
+///  - Base: the movement kit (unlockable, but usually always-on via allBaseAbilitiesUnlocked).
+///  - Secondary: permanent once unlocked, cannot be unequipped (Attack, Warp).
+///  - Divine Interventions: equippable powers (max N at once) that grant multipliers and
+///    extra abilities; equipping applies their multipliers through the multiplier system.
+///
+/// Runtime values are NOT serialized: they reset each play session and are (re)built by
+/// EnsureInitialized, so they persist between scenes but never get baked into the asset.
 /// </summary>
 [CreateAssetMenu(fileName = "PlayerStats", menuName = "Data/Player Data/Player Stats")]
 public class PlayerStats : ScriptableObject
@@ -32,9 +34,21 @@ public class PlayerStats : ScriptableObject
     [Header("Economy")]
     [SerializeField] private int startingCoins = 0;
 
-    [Header("Starting Abilities")]
-    [SerializeField] private List<AbilityType> defaultUnlockedAbilities = new List<AbilityType>();
-    [SerializeField] private List<AbilityType> defaultEquippedAbilities = new List<AbilityType>();
+    [Header("Base Abilities (movement kit)")]
+    [Tooltip("When true, all base abilities are always available (the unlocked set below is ignored).")]
+    [SerializeField] private bool allBaseAbilitiesUnlocked = true;
+    [SerializeField] private List<BaseAbility> defaultUnlockedBase = new List<BaseAbility>();
+
+    [Header("Secondary Abilities (permanent once unlocked)")]
+    [SerializeField] private List<SecondaryAbility> defaultUnlockedSecondary = new List<SecondaryAbility>();
+
+    [Header("Divine Interventions")]
+    [Tooltip("Every divine intervention in the game — used to resolve them when loading a save.")]
+    [SerializeField] private List<SO_DivineIntervention> divineLibrary = new List<SO_DivineIntervention>();
+    [SerializeField] private List<SO_DivineIntervention> defaultUnlockedDivine = new List<SO_DivineIntervention>();
+    [SerializeField] private List<SO_DivineIntervention> defaultEquippedDivine = new List<SO_DivineIntervention>();
+    [Tooltip("Maximum Divine Interventions equipped at once.")]
+    [SerializeField] private int maxEquippedDivine = 2;
     #endregion
 
     #region Runtime (not serialized — reset per session, persist across scenes)
@@ -47,8 +61,10 @@ public class PlayerStats : ScriptableObject
     private List<StatModifier> hpMultipliers;
     private List<StatModifier> damageMultipliers;
 
-    private List<AbilityType> unlockedAbilities;
-    private List<AbilityType> equippedAbilities;
+    private HashSet<BaseAbility> unlockedBase;
+    private HashSet<SecondaryAbility> unlockedSecondary;
+    private List<SO_DivineIntervention> unlockedDivine;
+    private List<SO_DivineIntervention> equippedDivine;
 
     private int activeWeaponIndex;
     private bool canAttack = true;
@@ -57,6 +73,8 @@ public class PlayerStats : ScriptableObject
     private string lastCheckpointScene;
     private Vector3 lastCheckpointPosition;
     private bool hasCheckpoint;
+
+    private long createdTicks;
     #endregion
 
     #region Events
@@ -64,15 +82,15 @@ public class PlayerStats : ScriptableObject
     public event Action<float, float> OnHealthChanged;
     public event Action<int> OnCoinsChanged;
     public event Action OnDeath;
+    /// <summary>Fired when any ability group changes (for HUD refresh).</summary>
+    public event Action OnAbilitiesChanged;
     #endregion
 
     #region Lifecycle
     private void OnEnable()
     {
-        // ScriptableObjects keep their runtime values between play sessions in the editor.
-        // Clearing the init flag when the asset (re)loads guarantees that a fresh launch always
-        // rebuilds stats from config (full health, default abilities, no checkpoint) via the
-        // next EnsureInitialized, instead of inheriting the previous session's state.
+        // ScriptableObjects keep runtime values between play sessions in the editor. Clearing
+        // the init flag on (re)load guarantees a fresh launch rebuilds from config.
         isInitialized = false;
     }
 
@@ -91,8 +109,19 @@ public class PlayerStats : ScriptableObject
         hpMultipliers = new List<StatModifier>();
         damageMultipliers = new List<StatModifier>();
 
-        unlockedAbilities = new List<AbilityType>(defaultUnlockedAbilities);
-        equippedAbilities = new List<AbilityType>(defaultEquippedAbilities);
+        unlockedBase = new HashSet<BaseAbility>(defaultUnlockedBase);
+        unlockedSecondary = new HashSet<SecondaryAbility>(defaultUnlockedSecondary);
+        unlockedDivine = new List<SO_DivineIntervention>(defaultUnlockedDivine);
+        equippedDivine = new List<SO_DivineIntervention>();
+
+        // Equip the default divines (also ensures they're in the unlocked pool). This applies
+        // their multipliers before we set starting health below.
+        foreach (var d in defaultEquippedDivine)
+        {
+            if (d == null) continue;
+            if (!unlockedDivine.Contains(d)) unlockedDivine.Add(d);
+            TryEquipDivineInternal(d);
+        }
 
         currentCoins = startingCoins;
         activeWeaponIndex = 0;
@@ -103,11 +132,14 @@ public class PlayerStats : ScriptableObject
         lastCheckpointPosition = Vector3.zero;
         hasCheckpoint = false;
 
-        currentHealth = EffectiveMaxHealth; // multipliers are empty here, so == maxHealth
+        createdTicks = DateTime.Now.Ticks; // stamped now; overwritten by a loaded save
+
+        currentHealth = EffectiveMaxHealth; // includes any equipped-divine HP multipliers
         isInitialized = true;
 
         OnHealthChanged?.Invoke(currentHealth, EffectiveMaxHealth);
         OnCoinsChanged?.Invoke(currentCoins);
+        OnAbilitiesChanged?.Invoke();
     }
     #endregion
 
@@ -210,31 +242,109 @@ public class PlayerStats : ScriptableObject
     }
     #endregion
 
-    #region Abilities
-    public IReadOnlyList<AbilityType> UnlockedAbilities => unlockedAbilities;
-    public IReadOnlyList<AbilityType> EquippedAbilities => equippedAbilities;
+    #region Base Abilities
+    public bool IsBaseUnlocked(BaseAbility ability)
+        => allBaseAbilitiesUnlocked || (unlockedBase != null && unlockedBase.Contains(ability));
 
-    public bool IsUnlocked(AbilityType ability) => unlockedAbilities != null && unlockedAbilities.Contains(ability);
-    public bool IsEquipped(AbilityType ability) => equippedAbilities != null && equippedAbilities.Contains(ability);
-
-    public void Unlock(AbilityType ability)
+    public void UnlockBase(BaseAbility ability)
     {
-        if (unlockedAbilities == null) unlockedAbilities = new List<AbilityType>();
-        if (!unlockedAbilities.Contains(ability))
-            unlockedAbilities.Add(ability);
+        if (unlockedBase == null) unlockedBase = new HashSet<BaseAbility>();
+        if (unlockedBase.Add(ability))
+            OnAbilitiesChanged?.Invoke();
+    }
+    #endregion
+
+    #region Secondary Abilities (permanent once unlocked)
+    public IReadOnlyCollection<SecondaryAbility> UnlockedSecondary => unlockedSecondary;
+
+    public bool IsSecondaryUnlocked(SecondaryAbility ability)
+        => unlockedSecondary != null && unlockedSecondary.Contains(ability);
+
+    public void UnlockSecondary(SecondaryAbility ability)
+    {
+        if (unlockedSecondary == null) unlockedSecondary = new HashSet<SecondaryAbility>();
+        if (unlockedSecondary.Add(ability))
+            OnAbilitiesChanged?.Invoke();
+    }
+    #endregion
+
+    #region Divine Interventions (equip up to max)
+    public int MaxEquippedDivine => maxEquippedDivine;
+    public IReadOnlyList<SO_DivineIntervention> UnlockedDivine => unlockedDivine;
+    public IReadOnlyList<SO_DivineIntervention> EquippedDivine => equippedDivine;
+
+    public bool IsDivineUnlocked(SO_DivineIntervention d) => d != null && unlockedDivine != null && unlockedDivine.Contains(d);
+    public bool IsDivineEquipped(SO_DivineIntervention d) => d != null && equippedDivine != null && equippedDivine.Contains(d);
+    public bool DivineSlotsFull => equippedDivine != null && equippedDivine.Count >= maxEquippedDivine;
+
+    public void UnlockDivine(SO_DivineIntervention d)
+    {
+        if (d == null) return;
+        if (unlockedDivine == null) unlockedDivine = new List<SO_DivineIntervention>();
+        if (!unlockedDivine.Contains(d))
+        {
+            unlockedDivine.Add(d);
+            OnAbilitiesChanged?.Invoke();
+        }
     }
 
-    /// <summary>Equips an ability. Returns false if it isn't unlocked yet.</summary>
-    public bool Equip(AbilityType ability)
+    /// <summary>Equips a divine intervention. Returns false if it isn't unlocked or slots are full.</summary>
+    public bool EquipDivine(SO_DivineIntervention d)
     {
-        if (!IsUnlocked(ability)) return false;
-        if (equippedAbilities == null) equippedAbilities = new List<AbilityType>();
-        if (!equippedAbilities.Contains(ability))
-            equippedAbilities.Add(ability);
+        if (!IsDivineUnlocked(d)) return false;
+        if (!TryEquipDivineInternal(d)) return false;
+        OnAbilitiesChanged?.Invoke();
         return true;
     }
 
-    public void Unequip(AbilityType ability) => equippedAbilities?.Remove(ability);
+    public void UnequipDivine(SO_DivineIntervention d)
+    {
+        if (d == null || equippedDivine == null) return;
+        if (equippedDivine.Remove(d))
+        {
+            RemoveDivineModifiers(d);
+            OnAbilitiesChanged?.Invoke();
+        }
+    }
+
+    /// <summary>True if any equipped divine intervention grants the given extra ability.</summary>
+    public bool HasDivineEffect(DivineEffect effect)
+    {
+        if (equippedDivine == null) return false;
+        foreach (var d in equippedDivine)
+            if (d != null && d.Grants(effect)) return true;
+        return false;
+    }
+
+    // Adds to the equipped list + applies modifiers, without firing the change event or
+    // checking the unlocked pool (callers handle those).
+    private bool TryEquipDivineInternal(SO_DivineIntervention d)
+    {
+        if (d == null) return false;
+        if (equippedDivine == null) equippedDivine = new List<SO_DivineIntervention>();
+        if (equippedDivine.Contains(d)) return true;
+        if (equippedDivine.Count >= maxEquippedDivine) return false;
+
+        equippedDivine.Add(d);
+        ApplyDivineModifiers(d);
+        return true;
+    }
+
+    private void ApplyDivineModifiers(SO_DivineIntervention d)
+    {
+        string id = "divine:" + d.Id;
+        if (!Mathf.Approximately(d.speedMultiplier, 1f)) AddSpeedMultiplier(id, d.speedMultiplier);
+        if (!Mathf.Approximately(d.damageMultiplier, 1f)) AddDamageMultiplier(id, d.damageMultiplier);
+        if (!Mathf.Approximately(d.healthMultiplier, 1f)) AddHealthMultiplier(id, d.healthMultiplier);
+    }
+
+    private void RemoveDivineModifiers(SO_DivineIntervention d)
+    {
+        string id = "divine:" + d.Id;
+        RemoveSpeedMultiplier(id);
+        RemoveDamageMultiplier(id);
+        RemoveHealthMultiplier(id);
+    }
     #endregion
 
     #region Active Weapon & Gates
@@ -278,11 +388,14 @@ public class PlayerStats : ScriptableObject
         EnsureInitialized();
         return new SaveData
         {
+            createdTicks = createdTicks,
             maxHealth = maxHealth,
             currentHealth = currentHealth,
             currentCoins = currentCoins,
-            unlockedAbilities = new List<AbilityType>(unlockedAbilities),
-            equippedAbilities = new List<AbilityType>(equippedAbilities),
+            unlockedBase = unlockedBase != null ? new List<BaseAbility>(unlockedBase) : new List<BaseAbility>(),
+            unlockedSecondary = unlockedSecondary != null ? new List<SecondaryAbility>(unlockedSecondary) : new List<SecondaryAbility>(),
+            unlockedDivineIds = IdsOf(unlockedDivine),
+            equippedDivineIds = IdsOf(equippedDivine),
             activeWeaponIndex = activeWeaponIndex,
             hasCheckpoint = hasCheckpoint,
             checkpointScene = lastCheckpointScene,
@@ -299,12 +412,26 @@ public class PlayerStats : ScriptableObject
             return;
         }
 
-        ResetToNewGame(); // clean slate for transient state (multipliers, gates), then apply saved values
+        ResetToNewGame(); // clean slate (also clears default-equipped divine modifiers below)
 
+        if (data.createdTicks != 0) createdTicks = data.createdTicks; // keep original creation stamp
         if (data.maxHealth > 0f) maxHealth = data.maxHealth;
         currentCoins = Mathf.Max(0, data.currentCoins);
-        unlockedAbilities = new List<AbilityType>(data.unlockedAbilities ?? new List<AbilityType>());
-        equippedAbilities = new List<AbilityType>(data.equippedAbilities ?? new List<AbilityType>());
+
+        unlockedBase = new HashSet<BaseAbility>(data.unlockedBase ?? new List<BaseAbility>());
+        unlockedSecondary = new HashSet<SecondaryAbility>(data.unlockedSecondary ?? new List<SecondaryAbility>());
+
+        // Rebuild divine state from ids, clearing whatever ResetToNewGame equipped by default.
+        foreach (var d in new List<SO_DivineIntervention>(equippedDivine))
+            UnequipDivine(d);
+        unlockedDivine = ResolveDivine(data.unlockedDivineIds);
+        if (data.equippedDivineIds != null)
+            foreach (var id in data.equippedDivineIds)
+            {
+                var d = FindDivine(id);
+                if (d != null) TryEquipDivineInternal(d);
+            }
+
         activeWeaponIndex = Mathf.Max(0, data.activeWeaponIndex);
         hasCheckpoint = data.hasCheckpoint;
         lastCheckpointScene = data.checkpointScene;
@@ -315,6 +442,36 @@ public class PlayerStats : ScriptableObject
 
         OnHealthChanged?.Invoke(currentHealth, EffectiveMaxHealth);
         OnCoinsChanged?.Invoke(currentCoins);
+        OnAbilitiesChanged?.Invoke();
+    }
+
+    private static List<string> IdsOf(List<SO_DivineIntervention> list)
+    {
+        var ids = new List<string>();
+        if (list != null)
+            foreach (var d in list)
+                if (d != null) ids.Add(d.Id);
+        return ids;
+    }
+
+    private List<SO_DivineIntervention> ResolveDivine(List<string> ids)
+    {
+        var result = new List<SO_DivineIntervention>();
+        if (ids == null) return result;
+        foreach (var id in ids)
+        {
+            var d = FindDivine(id);
+            if (d != null && !result.Contains(d)) result.Add(d);
+        }
+        return result;
+    }
+
+    private SO_DivineIntervention FindDivine(string id)
+    {
+        if (string.IsNullOrEmpty(id) || divineLibrary == null) return null;
+        foreach (var d in divineLibrary)
+            if (d != null && d.Id == id) return d;
+        return null;
     }
     #endregion
 }

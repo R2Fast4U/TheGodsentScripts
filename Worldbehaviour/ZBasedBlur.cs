@@ -72,7 +72,13 @@ public class ZBasedBlur : MonoBehaviour
 
     private void UpdateBlur()
     {
+        // Lazy-initialize to guard against calls before Start() (e.g. ExecuteInEditMode)
+        if (spriteRenderer == null)
+            spriteRenderer = GetComponent<Renderer>();
         if (spriteRenderer == null) return;
+
+        if (propertyBlock == null)
+            propertyBlock = new MaterialPropertyBlock();
 
         float currentZ = transform.position.z;
 

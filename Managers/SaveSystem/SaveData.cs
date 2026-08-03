@@ -10,12 +10,17 @@ using UnityEngine;
 [Serializable]
 public class SaveData
 {
+    [Tooltip("DateTime.Ticks of when this save was first created (for the menu's slot labels).")]
+    public long createdTicks;
+
     public float maxHealth;
     public float currentHealth;
     public int currentCoins;
 
-    public List<AbilityType> unlockedAbilities = new List<AbilityType>();
-    public List<AbilityType> equippedAbilities = new List<AbilityType>();
+    public List<BaseAbility> unlockedBase = new List<BaseAbility>();
+    public List<SecondaryAbility> unlockedSecondary = new List<SecondaryAbility>();
+    public List<string> unlockedDivineIds = new List<string>();
+    public List<string> equippedDivineIds = new List<string>();
 
     public int activeWeaponIndex;
 

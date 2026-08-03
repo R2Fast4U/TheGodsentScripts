@@ -55,14 +55,14 @@ public class PlayerJumpState : PlayerAbilityState
             jumpCutApplied = true;
         }
 
-        // Check for attack inputs to allow attacking while rising
-        if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
+        // Check for attack inputs to allow attacking while rising (respecting the CanAttack gate)
+        if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.primary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.primary);
             stateMachine.ChangeState(player.PrimaryAttackState);
             return;
         }
-        else if (player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
+        else if (player.CanAttack && player.InputHandler.AttackInputs[(int)PlayerInputHandler.CombatInputs.secondary])
         {
             player.InputHandler.UseAttackInput(PlayerInputHandler.CombatInputs.secondary);
             stateMachine.ChangeState(player.SecondaryAttackState);
@@ -87,5 +87,9 @@ public class PlayerJumpState : PlayerAbilityState
     public bool CanJump() => amountOfJumpsLeft > 0;
     public void ResetAmountOfJumpsLeft() => amountOfJumpsLeft = playerData.amountOfJumps;
     public void DecreaseAmountOfJumpsLeft() => amountOfJumpsLeft--;
+    /// <summary>Spends all remaining jumps — used when the player leaves the ground for a
+    /// non-jump reason (knockback, warp) so no stored jump can fire mid-air. Grounded states
+    /// restore it via ResetAmountOfJumpsLeft on landing.</summary>
+    public void ClearJumpsLeft() => amountOfJumpsLeft = 0;
     public bool ShouldCutJump() => jumpCut;
 }

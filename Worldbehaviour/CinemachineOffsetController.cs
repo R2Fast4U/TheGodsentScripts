@@ -32,6 +32,7 @@ public class CinemachineOffsetController : MonoBehaviour
     private float lensHoldTimer;
     private float lensTargetValue;
     private float lensRecoverySpeed;
+    private float lensApproachSpeed; // 0 = snap in instantly; > 0 = ease in at this speed
     private bool isLensPunching;
 
     // Positional shake state.
@@ -90,7 +91,10 @@ public class CinemachineOffsetController : MonoBehaviour
 
             if (lensHoldTimer > 0f)
             {
-                currentLensValue = lensTargetValue;
+                // Ease in toward the target if an approach speed is set, else snap and hold.
+                currentLensValue = lensApproachSpeed > 0f
+                    ? Mathf.Lerp(currentLensValue, lensTargetValue, Time.deltaTime * lensApproachSpeed)
+                    : lensTargetValue;
             }
             else
             {
@@ -126,8 +130,14 @@ public class CinemachineOffsetController : MonoBehaviour
         Shake(playerHitShakeAmplitude, playerHitShakeDuration);
     }
 
-    /// <summary>Nudge the lens by <paramref name="amount"/> (negative = zoom in, positive = zoom out).</summary>
+    /// <summary>Nudge the lens by <paramref name="amount"/> (negative = zoom in, positive = zoom out),
+    /// snapping in instantly.</summary>
     public void PunchLens(float amount, float duration, float recoverySpeed)
+        => PunchLens(amount, duration, recoverySpeed, 0f);
+
+    /// <summary>As above, but <paramref name="approachSpeed"/> controls how fast it eases IN
+    /// (0 = instant snap).</summary>
+    public void PunchLens(float amount, float duration, float recoverySpeed, float approachSpeed)
     {
         if (virtualCamera == null || defaultLensValue <= 0f)
             return;
@@ -135,14 +145,24 @@ public class CinemachineOffsetController : MonoBehaviour
         lensTargetValue = defaultLensValue + amount;
         lensHoldTimer = duration;
         lensRecoverySpeed = recoverySpeed;
-        currentLensValue = lensTargetValue;
+        lensApproachSpeed = approachSpeed;
 
+        if (approachSpeed <= 0f)
+        {
+            currentLensValue = lensTargetValue; // snap in
+            ApplyLens();
+        }
+        // else: leave currentLensValue as-is; LateUpdate eases it toward the target.
+
+        isLensPunching = true;
+    }
+
+    private void ApplyLens()
+    {
         if (virtualCamera.m_Lens.Orthographic)
             virtualCamera.m_Lens.OrthographicSize = currentLensValue;
         else
             virtualCamera.m_Lens.FieldOfView = currentLensValue;
-
-        isLensPunching = true;
     }
 
     /// <summary>Start a decaying positional camera shake.</summary>

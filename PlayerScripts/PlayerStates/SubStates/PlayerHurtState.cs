@@ -28,6 +28,10 @@ public class PlayerHurtState : PlayerState
         // Clear locomotion bools so the animator resolves cleanly into PlayerHurt.
         player.Anim.SetBool("move", false);
         player.Anim.SetBool("inAir", false);
+
+        // Getting knocked off the ground must not leave a usable jump stored for mid-air.
+        player.JumpState.ClearJumpsLeft();
+        player.InputBuffer.ConsumeBufferedJump();
     }
 
     public override void LogicUpdate()

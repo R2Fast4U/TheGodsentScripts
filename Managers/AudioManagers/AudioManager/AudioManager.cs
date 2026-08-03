@@ -20,7 +20,9 @@ public enum SoundType
     WALLJUMP,
     WALLLAND,
     LOOKUP,
-    LOOKDOWN
+    LOOKDOWN,
+    CHECKPOINT,
+    CHECKPOINTEXIT,
 }
 [RequireComponent(typeof(AudioSource))]
 public class AudioManager : MonoBehaviour
@@ -35,8 +37,26 @@ public class AudioManager : MonoBehaviour
 
     private void Awake()
     {
+        // Single persistent instance: SFX are fired globally via the static PlaySound API, so we
+        // keep one pool alive across scenes and drop any duplicates.
+        if (instance != null && instance != this)
+        {
+            Destroy(gameObject);
+            return;
+        }
         instance = this;
+
+        // DontDestroyOnLoad only works on root objects — detach if parented (e.g. under GameManager).
+        if (transform.parent != null)
+            transform.SetParent(null);
+        DontDestroyOnLoad(gameObject);
+
         InitializePool();
+    }
+
+    private void OnDestroy()
+    {
+        if (instance == this) instance = null;
     }
 
     void Start()

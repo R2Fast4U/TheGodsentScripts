@@ -24,6 +24,8 @@ public class Player : MonoBehaviour
     public PlayerAttackState PrimaryAttackState { get; private set; }
     public PlayerAttackState SecondaryAttackState { get; private set; }
     public PlayerHurtState HurtState { get; private set; }
+    public PlayerDeathState DeathState { get; private set; }
+    public PlayerCheckpointState CheckpointState { get; private set; }
 
     [SerializeField] private PlayerData playerData;
     public PlayerData PlayerData => playerData;
@@ -57,8 +59,8 @@ public class Player : MonoBehaviour
 
     // Ability gates: allowed only when not disabled (CanAttack/CanWarp flag) AND the ability is
     // equipped. When no PlayerStats is assigned, default to allowed so the player still works.
-    public bool CanAttack => Stats == null || (Stats.CanAttack && Stats.IsEquipped(AbilityType.Attack));
-    public bool CanWarp => Stats == null || (Stats.CanWarp && Stats.IsEquipped(AbilityType.Warp));
+    public bool CanAttack => Stats == null || (Stats.CanAttack && Stats.IsSecondaryUnlocked(SecondaryAbility.Attack));
+    public bool CanWarp => Stats == null || (Stats.CanWarp && Stats.IsSecondaryUnlocked(SecondaryAbility.Warp));
 
     // Flag set when a jump was cut (player released jump early) so gravity
     // adjustments can be applied across state transitions.
@@ -77,6 +79,11 @@ public class Player : MonoBehaviour
     [SerializeField] private Transform feetParticlesPosition;
     [SerializeField] private ParticleSystem lightParticlesPrefab;
     [SerializeField] private Transform lightParticlesPosition;
+
+    [Header("Death")]
+    [SerializeField] private GameObject deathParticlesPrefab;
+    [Tooltip("Where death particles spawn. Defaults to the player's position if empty.")]
+    [SerializeField] private Transform deathParticlesPosition;
     #endregion
 
     #region Unity Callbacks
@@ -105,6 +112,8 @@ public class Player : MonoBehaviour
         PrimaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");
         SecondaryAttackState = new PlayerAttackState(this, StateMachine, playerData, "attack");
         HurtState = new PlayerHurtState(this, StateMachine, playerData, "hurt");
+        DeathState = new PlayerDeathState(this, StateMachine, playerData, "dead");
+        CheckpointState = new PlayerCheckpointState(this, StateMachine, playerData, "checkpoint");
     }
 
     private void Start()
@@ -149,11 +158,19 @@ public class Player : MonoBehaviour
             Combat.OnDeath += HandleDeath;
         }
 
-        // Only move to the saved checkpoint when we actually respawned/continued (not on a
-        // normal play or level entry). Otherwise the player spawns where it's placed in the scene.
+        // Positioning priority: a SceneDoor's named spawn point, then a checkpoint respawn,
+        // otherwise the player stays where it's placed in the scene.
+        string spawnId = GameManager.Instance != null ? GameManager.Instance.ConsumePendingSpawnId() : null;
+        PlayerSpawnPoint doorSpawn = !string.IsNullOrEmpty(spawnId) ? PlayerSpawnPoint.Find(spawnId) : null;
+
         bool respawning = GameManager.Instance != null && GameManager.Instance.ConsumePendingRespawn();
-        if (respawning && Stats != null && Stats.HasCheckpoint &&
-            Stats.LastCheckpointScene == UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)
+
+        if (doorSpawn != null)
+        {
+            transform.position = doorSpawn.transform.position;
+        }
+        else if (respawning && Stats != null && Stats.HasCheckpoint &&
+                 Stats.LastCheckpointScene == UnityEngine.SceneManagement.SceneManager.GetActiveScene().name)
         {
             transform.position = Stats.LastCheckpointPosition;
         }
@@ -228,12 +245,25 @@ public class Player : MonoBehaviour
     // Invoked by Combat.OnDeath when health reaches zero.
     private void HandleDeath()
     {
-        // Stop the player and lock out control, then hand off to the game-over flow.
-        Core.Movement.SetVelocityZero();
-        if (InputHandler != null)
-            InputHandler.BlockInput();
+        // Spawn death particles.
+        if (deathParticlesPrefab != null)
+        {
+            Vector3 pos = deathParticlesPosition != null ? deathParticlesPosition.position : transform.position;
+            Instantiate(deathParticlesPrefab, pos, Quaternion.identity);
+        }
 
+        // Enter the death state (plays the death animation and freezes control), then hand off
+        // to the game-over flow (death sound, fade, screen).
+        StateMachine.ChangeState(DeathState);
         GameManager.Instance?.TriggerGameOver();
+    }
+
+    /// <summary>Called by a Checkpoint trigger to play the checkpoint animation.</summary>
+    public void EnterCheckpoint()
+    {
+        if (Combat != null && Combat.IsDead) return;
+        if (StateMachine.CurrentState == CheckpointState) return;
+        StateMachine.ChangeState(CheckpointState);
     }
     #endregion
     #region Check Properties
